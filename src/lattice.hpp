@@ -14,6 +14,7 @@ struct tasep_state;
 class tasep_validator;
 
 struct particle {
+  const static int ribosome_len = 10;
   size_t pos;
   double rate;
   bool sample_tagged; 
@@ -36,7 +37,6 @@ public:
   int iteration;       // current
   polysome(const vector<double> *rate_vec);
   size_t size() const { return _mRNA_len; } 
-  void set_ribowidth(int w) { _ribosome_len=w; }
   void set_riboAsite(int A) { _Asite=A; }
   const vector<double>& get_Aprob() const { return _Aprob; }
   const vector<double>& get_Rprob() const { return _Rprob; }
@@ -49,7 +49,6 @@ private:
   bool _should_check;
   bool _steady;
   int _pep_cnt;        // number of terminated ribosomes
-  int _ribosome_len;
   int _Asite;
   size_t _mRNA_len;
   uniform_real_distribution<double> _rand;
@@ -77,7 +76,7 @@ private:
   void update_Rcover(size_t pos);
   void initiate();
   void move(size_t ribo_id);
-  bool should_stall(size_t ribo_id) const { return (ribo_id) ? (_ribosome.at(ribo_id-1).pos - _ribosome.at(ribo_id).pos <= _ribosome_len) : false ; }
+  bool should_stall(size_t ribo_id) const { return (ribo_id) ? (_ribosome.at(ribo_id-1).pos - _ribosome.at(ribo_id).pos <= particle::ribosome_len) : false ; }
   void update_transition_rate(size_t event_id) {_ribosome.at(event_id).rate = should_stall(event_id) ? 0 : _rate_vec->at(_ribosome[event_id].pos+1); }
   void terminate();
   void compute_profile(const char type = 'A');

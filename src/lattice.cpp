@@ -18,7 +18,9 @@ ostream& operator<<(ostream& os, const codon_state& c) {
 
 // ribosome lenghth: 10 codons, A-site location: 6th codon (zero-indexed)
 // params from Steve Skiena et al.'s paper
-polysome::polysome(const vector<double> *rate_vec): t(0), iteration(0), _tagged(false), _should_check(false), _steady(false), _pep_cnt(0), _ribosome_len(10), _Asite(6), _event('i'), _event_id(0), _rate_vec(rate_vec), _tpre(0)
+polysome::polysome(const vector<double> *rate_vec): t(0), iteration(0), _tagged(false), _should_check(false), 
+         _steady(false), _pep_cnt(0), _Asite(6), 
+         _event('i'), _event_id(0), _rate_vec(rate_vec), _tpre(0)
 {
   _rand = uniform_real_distribution<double>(0,1);
   _mRNA_len = rate_vec->size()-1;
@@ -42,7 +44,7 @@ void polysome::flip_codon(size_t i)
 void polysome::update_Rcover(size_t i)
 {
   // update ribosome occupancy
-  int ilow(i-_Asite), ihigh(i+_ribosome_len-_Asite);
+  int ilow(i-_Asite), ihigh(i+particle::ribosome_len-_Asite);
   // only the left most and right most position
   // covered by the ribosome need to be updated
   // update left most position
@@ -148,7 +150,7 @@ size_t polysome::jump_event()
   // fill out the last one
   cum_interval.back() = cum_interval[n-2];
   // initiation possible if first cocon not occupied
-  if (_ribosome.back().pos >= _ribosome_len)
+  if (_ribosome.back().pos >= particle::ribosome_len)
     cum_interval.back() += _rate_vec->at(0);
   // sample jump event
   double rand_event = _rand(_rg)*cum_interval[n-1];
@@ -314,8 +316,8 @@ void polysome::start_sample()
 
 void polysome::run()
 {
-  if ( _ribosome_len < _Asite ) {
-    cerr<<"A-site not within ribosome! A: "<<_Asite<<" ribolen: "<<_ribosome_len<<endl;
+  if ( particle::ribosome_len < _Asite ) {
+    cerr<<"A-site not within ribosome! A: "<<_Asite<<" ribolen: "<<particle::ribosome_len<<endl;
     exit(1);
   }
   // burn in

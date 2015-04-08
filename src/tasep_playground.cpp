@@ -30,7 +30,6 @@ int main(int argc, char **argv)
   shared_ptr<vector<double>> rate_vec=make_rate_vec(10, 0.1, 100);
   (*rate_vec)[0] = 10;
   polysome p(&*rate_vec);
-  p.set_ribowidth(10);
   p.run();
   // print to a string
   ostringstream ss_result;
