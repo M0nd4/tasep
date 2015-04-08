@@ -39,16 +39,11 @@ public:
   size_t size() const { return _mRNA_len; } 
   void set_ribowidth(int w) { _ribosome_len=w; }
   void set_riboAsite(int A) { _Asite=A; }
-  void store_state (tasep_state& state) const;
   const vector<double>& get_Aprob() const { return _Aprob; }
   const vector<double>& get_Rprob() const { return _Rprob; }
   void run();
   double compute_translation_rate() const { return _pep_cnt/t; }
-  // intermediate analysis during developing
-  void test_run();
-  void profile_recorder(int steps, const string& fname);
-  void translation_time_recorder();
-  void check_run();
+  
 private:
   static mt19937_64 _rg;
   bool _tagged;
@@ -91,34 +86,8 @@ private:
   bool is_steady() { return true; }
   double set_dpdt_threshold(double eps);
   bool check_steady(double eps = 1e-3);
-  bool done_burn_in();
-  void start_sample();
   bool done_sample() { return _steady and iteration>size()*100; }
 };
 
-struct tasep_state {
-  void print_state(bool simplified = true) const;
-  vector<bool> get_occupancy() const;
-  bool check_dup_posi() const;
-  bool check_long_toccupied(const polysome& p, double threshold) const;
-  vector<codon_state> Acover;
-  vector<codon_state> Rcover;
-  deque<particle> ribosome;
-  double t;
-  double dt;
-  char event;
-  size_t event_id;
-};
-
-class tasep_validator {
-public:
-  bool check(const polysome& p);
-  void show_states() const;
-  bool check_single_move() const;
-  tasep_state state_pre;
-  tasep_state state_current;
-};
-
-bool check_steady_flow(const vector<double>& rate, const vector<double>& profile, double eps=0.1);
 
 #endif
