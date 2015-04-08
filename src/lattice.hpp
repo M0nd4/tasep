@@ -33,8 +33,7 @@ ostream& operator<<(ostream& os, const codon_state& c);
 class polysome {
 public:
   double t;            // current time in sec
-  double dt;           // period, after which the next event happens
-  int iteration;
+  int iteration;       // current
   polysome(const vector<double> *rate_vec);
   size_t size() const { return _mRNA_len; } 
   void set_ribowidth(int w) { _ribosome_len=w; }
@@ -49,7 +48,7 @@ private:
   bool _tagged;
   bool _should_check;
   bool _steady;
-  int _pep_cnt;
+  int _pep_cnt;        // number of terminated ribosomes
   int _ribosome_len;
   int _Asite;
   size_t _mRNA_len;

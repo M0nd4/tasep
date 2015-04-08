@@ -18,7 +18,7 @@ ostream& operator<<(ostream& os, const codon_state& c) {
 
 // ribosome lenghth: 10 codons, A-site location: 6th codon (zero-indexed)
 // params from Steve Skiena et al.'s paper
-polysome::polysome(const vector<double> *rate_vec): t(0), dt(0), iteration(0), _tagged(false), _should_check(false), _steady(false), _pep_cnt(0), _ribosome_len(10), _Asite(6), _event('i'), _event_id(0), _rate_vec(rate_vec), _tpre(0)
+polysome::polysome(const vector<double> *rate_vec): t(0), iteration(0), _tagged(false), _should_check(false), _steady(false), _pep_cnt(0), _ribosome_len(10), _Asite(6), _event('i'), _event_id(0), _rate_vec(rate_vec), _tpre(0)
 {
   _rand = uniform_real_distribution<double>(0,1);
   _mRNA_len = rate_vec->size()-1;
@@ -157,7 +157,7 @@ size_t polysome::jump_event()
   // sample jump time
   double u(0);
   while (u==0) u = _rand(_rg);
-  dt = -std::log(u)/cum_interval.back();
+  double dt = -std::log(u)/cum_interval.back();
   assert(!std::isinf(dt));
   t += dt;
   // cout<<"rate_vec: ";
@@ -180,7 +180,7 @@ void polysome::update()
   // step 4: update rate in case of stall
   // initial initiation
   if (is_empty()) {
-    dt = -std::log(_rand(_rg))/_rate_vec->at(0);
+    double dt = -std::log(_rand(_rg))/_rate_vec->at(0);
     t += dt;
     initiate();
     _event_id = 0;
