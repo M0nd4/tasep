@@ -288,20 +288,44 @@ double polysome::set_dpdt_threshold(double eps)
 }
 
 
+bool polysome::done_burn_in()
+{
+  // reference: The effect of tRNA levels on decoding times of mRNA codon
+  return _pep_cnt > 200;
+}
+
+
+void polysome::start_sample()
+{
+  _steady = false;
+  iteration=0;
+  // t = 0;
+  // _tpre = 0;
+  // for (auto& c: _Acover) {
+  //   c.tpre = 0;
+  //   c.tsum = 0;
+  // }
+  // for (auto& c: _Rcover) {
+  //   c.tpre = 0;
+  //   c.tsum = 0;
+  // }
+}
+
+
 void polysome::run()
 {
   if ( _ribosome_len < _Asite ) {
     cerr<<"A-site not within ribosome! A: "<<_Asite<<" ribolen: "<<_ribosome_len<<endl;
     exit(1);
   }
-  // // burn in
-  // while (not done_burn_in()) {
-  //   update();
-  //   iteration++;
-  // }
-  // // reset states
-  // start_sample();
-  // // collect data again
+  // burn in
+  while (not done_burn_in()) {
+    update();
+    iteration++;
+  }
+  // reset states
+  start_sample();
+  // collect data again
   double threshold(0);
   while(not done_sample()) {
     update();

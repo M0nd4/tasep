@@ -25,15 +25,15 @@ struct particle {
 // for storing cumulative ribosome/ribosome Asite occupancy time
 struct codon_state {
   bool occupied;
-  double tpre;
-  double tsum;
+  double tpre;         // time when latest flip happened
+  double tsum;         // ammount of time it's been occupied so far
 };
 ostream& operator<<(ostream& os, const codon_state& c); 
 
 class polysome {
 public:
-  double t;
-  double dt;
+  double t;            // current time in sec
+  double dt;           // period, after which the next event happens
   int iteration;
   polysome(const vector<double> *rate_vec);
   size_t size() const { return _mRNA_len; } 
@@ -86,6 +86,8 @@ private:
   bool is_steady() { return true; }
   double set_dpdt_threshold(double eps);
   bool check_steady(double eps = 1e-3);
+  bool done_burn_in();
+  void start_sample();
   bool done_sample() { return _steady and iteration>size()*100; }
 };
 
