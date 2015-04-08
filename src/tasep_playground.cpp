@@ -1,6 +1,8 @@
 #include <fstream>
 #include <vector>
 #include <memory>
+#include <sstream>
+#include <fstream>
 #include "lattice.hpp" 
 #include "utils.hpp"
 
@@ -15,8 +17,21 @@ int main()
   polysome p(&*rate_vec);
   p.set_ribowidth(10);
   p.run();
-  cout<<"A: "<<p.get_Aprob()<<endl;
-  cout<<"R: "<<p.get_Rprob()<<endl;
+  // print to a string
+  ostringstream ss_result;
+  ss_result <<"A: "<<p.get_Aprob()<<endl;
+  ss_result <<"R: "<<p.get_Rprob()<<endl;
+  // load ground truth
+  ifstream ifs ("test/truth1.txt");
+  stringstream ss_truth;
+  ss_truth << ifs.rdbuf();
+  // compare the current result and the saved file. 
+  // TODO: I'm expecting problems with cross-platform line endings differences
+  if (ss_result.str() == ss_truth.str())
+    cout << "passed" << endl;
+  else
+    cout << "failed" << endl;    
+
   return 0;
 }
 
