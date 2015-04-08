@@ -9,7 +9,7 @@
 #include "utils.hpp"
 #include "math_utils.hpp"
 
-mt19937_64 polysome::_rg(SEED);
+mt19937_64 Polysome::_rg(SEED);
 
 ostream& operator<<(ostream& os, const codon_state& c) {
   os<<"["<<c.occupied<<" "<<c.tpre<<" "<<c.tsum<<"]";
@@ -18,7 +18,7 @@ ostream& operator<<(ostream& os, const codon_state& c) {
 
 // ribosome lenghth: 10 codons, A-site location: 6th codon (zero-indexed)
 // params from Steve Skiena et al.'s paper
-polysome::polysome(const vector<double> *rate_vec): t(0), iteration(0), _tagged(false), _should_check(false), 
+Polysome::Polysome(const vector<double> *rate_vec): t(0), iteration(0), _tagged(false), _should_check(false), 
          _steady(false), _pep_cnt(0), _Asite(6), 
          _event('i'), _event_id(0), _rate_vec(rate_vec), _tpre(0)
 {
@@ -32,7 +32,7 @@ polysome::polysome(const vector<double> *rate_vec): t(0), iteration(0), _tagged(
   _Rprob_pre = vector<double>(_mRNA_len, 0);
 }
 
-void polysome::flip_codon(size_t i)
+void Polysome::flip_codon(size_t i)
 {
   // update Asite occupancy
   if (_Acover[i].occupied)
@@ -41,10 +41,10 @@ void polysome::flip_codon(size_t i)
   _Acover[i].tpre = t;
 }
 
-void polysome::update_Rcover(size_t i)
+void Polysome::update_Rcover(size_t i)
 {
   // update ribosome occupancy
-  int ilow(i-_Asite), ihigh(i+particle::ribosome_len-_Asite);
+  int ilow(i-_Asite), ihigh(i+Particle::ribosome_len-_Asite);
   // only the left most and right most position
   // covered by the ribosome need to be updated
   // update left most position
@@ -108,16 +108,16 @@ void polysome::update_Rcover(size_t i)
   }
 }
 
-void polysome::initiate()
+void Polysome::initiate()
 {
-  _ribosome.emplace_back(particle{0, _rate_vec->at(1), !_tagged });
+  _ribosome.emplace_back(Particle{0, _rate_vec->at(1), !_tagged });
   if (not _tagged) _tagged = true;
   flip_codon(0);
   update_Rcover(0);
   _event = 'i';
 }
 
-void polysome::move(size_t ribo_id)
+void Polysome::move(size_t ribo_id)
 {
   _ribosome[ribo_id].pos++;
   flip_codon(_ribosome[ribo_id].pos);
@@ -125,7 +125,7 @@ void polysome::move(size_t ribo_id)
   flip_codon(_ribosome[ribo_id].pos-1);
 }
 
-void polysome::terminate()
+void Polysome::terminate()
 {
   if (_ribosome.front().sample_tagged) {
     _should_check = true;
@@ -136,7 +136,7 @@ void polysome::terminate()
   _event = 't';
 }
 
-size_t polysome::jump_event()
+size_t Polysome::jump_event()
 {
   vector<double> cum_interval(_ribosome.size()+1, 0);
   // compute cumulative intervals of all jumping events
@@ -150,7 +150,7 @@ size_t polysome::jump_event()
   // fill out the last one
   cum_interval.back() = cum_interval[n-2];
   // initiation possible if first cocon not occupied
-  if (_ribosome.back().pos >= particle::ribosome_len)
+  if (_ribosome.back().pos >= Particle::ribosome_len)
     cum_interval.back() += _rate_vec->at(0);
   // sample jump event
   double rand_event = _rand(_rg)*cum_interval[n-1];
@@ -174,7 +174,7 @@ size_t polysome::jump_event()
   return event_id;
 }
 
-void polysome::update()
+void Polysome::update()
 {
   // step 1: choose a jump event
   // step 2: update ribosome position
@@ -222,7 +222,7 @@ void polysome::update()
   }// else non-empty
 }
 
-void polysome::compute_profile(const char type)
+void Polysome::compute_profile(const char type)
 {
   vector<double> *profile;
   vector<codon_state> *codon;
@@ -235,14 +235,14 @@ void polysome::compute_profile(const char type)
     codon = &_Rcover;
   }
   else {
-    cerr<<"profile type "<<type<<" not supported! fail to compute polysome::compute_profile()!"<<endl;
+    cerr<<"profile type "<<type<<" not supported! fail to compute Polysome::compute_profile()!"<<endl;
     exit(1);
   }
   for (size_t i=0; i!=size(); ++i)
     (*profile)[i] =  ((*codon)[i].tsum + (*codon)[i].occupied * (t - (*codon)[i].tpre))/t;
 }
 
-void polysome::update_profile(const char type)
+void Polysome::update_profile(const char type)
 {
   vector<double> *p, *ppre;
   if (type=='A') {
@@ -254,7 +254,7 @@ void polysome::update_profile(const char type)
     ppre = &_Rprob_pre;
   }
   else {
-    cerr<<"profile type "<<type<<" not supported! fail to compute polysome::update_profile()!"<<endl;
+    cerr<<"profile type "<<type<<" not supported! fail to compute Polysome::update_profile()!"<<endl;
     exit(1);
 
   }
@@ -262,7 +262,7 @@ void polysome::update_profile(const char type)
   compute_profile(type);
 }
 
-bool polysome::check_steady(double eps)
+bool Polysome::check_steady(double eps)
 {
   update_profile('R');
   update_profile('A');
@@ -282,7 +282,7 @@ bool polysome::check_steady(double eps)
   return dpdt<eps;
 }
 
-double polysome::set_dpdt_threshold(double eps)
+double Polysome::set_dpdt_threshold(double eps)
 {
   compute_profile('A');
   double scale(median(_Aprob));
@@ -290,14 +290,14 @@ double polysome::set_dpdt_threshold(double eps)
 }
 
 
-bool polysome::done_burn_in()
+bool Polysome::done_burn_in()
 {
   // reference: The effect of tRNA levels on decoding times of mRNA codon
   return _pep_cnt > 200;
 }
 
 
-void polysome::start_sample()
+void Polysome::start_sample()
 {
   _steady = false;
   iteration=0;
@@ -314,10 +314,10 @@ void polysome::start_sample()
 }
 
 
-void polysome::run()
+void Polysome::run()
 {
-  if ( particle::ribosome_len < _Asite ) {
-    cerr<<"A-site not within ribosome! A: "<<_Asite<<" ribolen: "<<particle::ribosome_len<<endl;
+  if ( Particle::ribosome_len < _Asite ) {
+    cerr<<"A-site not within ribosome! A: "<<_Asite<<" ribolen: "<<Particle::ribosome_len<<endl;
     exit(1);
   }
   // burn in

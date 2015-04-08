@@ -6,14 +6,8 @@
 #include <random>
 
 using namespace std;
-//------forward declaration------//
-struct particle;
-struct codon_state;
-class polysome;
-struct tasep_state;
-class tasep_validator;
 
-struct particle {
+struct Particle {
   const static int ribosome_len = 10;
   size_t pos;
   double rate;
@@ -31,11 +25,11 @@ struct codon_state {
 };
 ostream& operator<<(ostream& os, const codon_state& c); 
 
-class polysome {
+class Polysome {
 public:
   double t;            // current time in sec
-  int iteration;       // current
-  polysome(const vector<double> *rate_vec);
+  int iteration;
+  Polysome(const vector<double> *rate_vec);
   size_t size() const { return _mRNA_len; } 
   void set_riboAsite(int A) { _Asite=A; }
   const vector<double>& get_Aprob() const { return _Aprob; }
@@ -54,7 +48,7 @@ private:
   uniform_real_distribution<double> _rand;
   // a list of bound ribosome
   // front always has the furthest location
-  deque<particle> _ribosome; 
+  deque<Particle> _ribosome; 
   // vector of ribosome Asite occupancy accumulative time on codons
   // mRNA_len+1 elements to make flip_codon function easier to implement
   // (flip without monitoring pos being the end of the mRNA)
@@ -76,7 +70,7 @@ private:
   void update_Rcover(size_t pos);
   void initiate();
   void move(size_t ribo_id);
-  bool should_stall(size_t ribo_id) const { return (ribo_id) ? (_ribosome.at(ribo_id-1).pos - _ribosome.at(ribo_id).pos <= particle::ribosome_len) : false ; }
+  bool should_stall(size_t ribo_id) const { return (ribo_id) ? (_ribosome.at(ribo_id-1).pos - _ribosome.at(ribo_id).pos <= Particle::ribosome_len) : false ; }
   void update_transition_rate(size_t event_id) {_ribosome.at(event_id).rate = should_stall(event_id) ? 0 : _rate_vec->at(_ribosome[event_id].pos+1); }
   void terminate();
   void compute_profile(const char type = 'A');
