@@ -6,12 +6,27 @@
 #include "lattice.hpp" 
 #include "utils.hpp"
 
+#include <tclap/CmdLine.h>
+
 using namespace std;
+using namespace TCLAP;
 
 shared_ptr<vector<double>> make_rate_vec(double rfast, double rslow, size_t rlen);
 
-int main()
+int main(int argc, char **argv)
 {
+  // init the parser
+  CmdLine cmd ("run experiment, and compare to stored file");
+  // describe arguments
+  ValueArg<string> cmdTruthPath ("", "truth", "path of ground truth", true, "", "string", cmd);
+  ValueArg<string> cmdOutPath ("", "out", "path of output", false, "/dev/null", "string", cmd);
+  MultiSwitchArg   cmdVerbose ("v", "verbose", "verbosity level", cmd);
+  // parse arguments
+  cmd.parse(argc, argv);
+  string truthPath = cmdTruthPath.getValue();
+  string outPath   = cmdOutPath.getValue();
+  int    verbose   = cmdVerbose.getValue();
+
   shared_ptr<vector<double>> rate_vec=make_rate_vec(10, 0.1, 100);
   (*rate_vec)[0] = 10;
   polysome p(&*rate_vec);
@@ -22,7 +37,7 @@ int main()
   ss_result <<"A: "<<p.get_Aprob()<<endl;
   ss_result <<"R: "<<p.get_Rprob()<<endl;
   // load ground truth
-  ifstream ifs ("test/truth1.txt");
+  ifstream ifs (truthPath);
   stringstream ss_truth;
   ss_truth << ifs.rdbuf();
   // compare the current result and the saved file. 
@@ -31,6 +46,9 @@ int main()
     cout << "passed" << endl;
   else
     cout << "failed" << endl;    
+  // write output to file 
+  ofstream ofs (outPath);
+  ofs << ss_result.str() << flush;
 
   return 0;
 }
