@@ -11,26 +11,38 @@
 
 mt19937_64 Polysome::_rg(SEED);
 
-ostream& operator<<(ostream& os, const codon_state& c) {
+
+double sample_time (uniform_real_distribution<double>& rand, 
+                    mt19937_64& rg, 
+                    double rate)
+{
+  // exponential  distribution
+  double u(0);
+  while (u==0) u = rand(rg);
+  double dt = -std::log(u) / rate;
+  assert(!std::isinf(dt));
+  return dt;
+}
+
+
+ostream& operator<<(ostream& os, const Codon& c) {
   os<<"["<<c.occupied<<" "<<c.tpre<<" "<<c.tsum<<"]";
   return os;
 }
 
-// ribosome lenghth: 10 codons, A-site location: 6th codon (zero-indexed)
-// params from Steve Skiena et al.'s paper
-Polysome::Polysome(const vector<double> *rate_vec): t(0), iteration(0), _tagged(false), _should_check(false), 
-         _steady(false), _pep_cnt(0), _Asite(6), 
-         _event('i'), _event_id(0), _rate_vec(rate_vec), _tpre(0)
-{
-  _rand = uniform_real_distribution<double>(0,1);
-  _mRNA_len = rate_vec->size()-1;
-  _Acover = vector<codon_state>(_mRNA_len+1, codon_state{false, 0, 0});
-  _Rcover = vector<codon_state>(_mRNA_len, codon_state{false, 0, 0});
-  _Aprob = vector<double>(_mRNA_len, 0);
-  _Aprob_pre = vector<double>(_mRNA_len, 0);
-  _Rprob = vector<double>(_mRNA_len, 0);
-  _Rprob_pre = vector<double>(_mRNA_len, 0);
-}
+
+Polysome::Polysome(const vector<double> *rate_vec): 
+  _rate_vec  (rate_vec), 
+  _mRNA_len  (rate_vec->size()-1),
+  _Acover    (_mRNA_len+1, Codon{false, 0, 0}),
+  _Rcover    (_mRNA_len, Codon{false, 0, 0}),
+  _Aprob     (_mRNA_len, 0),
+  _Aprob_pre (_mRNA_len, 0),
+  _Rprob     (_mRNA_len, 0),
+  _Rprob_pre (_mRNA_len, 0),
+  _rand      (uniform_real_distribution<double>(0,1))
+{ }
+
 
 void Polysome::flip_codon(size_t i)
 {
@@ -41,17 +53,18 @@ void Polysome::flip_codon(size_t i)
   _Acover[i].tpre = t;
 }
 
+
 void Polysome::update_Rcover(size_t i)
 {
   // update ribosome occupancy
-  int ilow(i-_Asite), ihigh(i+Particle::ribosome_len-_Asite);
+  int ilow(i-Ribosome::Asite), ihigh(i+Ribosome::ribosome_len-Ribosome::Asite);
   // only the left most and right most position
   // covered by the ribosome need to be updated
   // update left most position
   if (ilow >= 0) {
     if ( not _Rcover[ilow].occupied ) {
       cerr<<"left most codon turned unoccupied before expected! i: "<<i<<endl;
-      cout<<"mlen: "<<_mRNA_len<<endl;
+      cout<<"mlen: "<<size()<<endl;
       exit(1);
     }
     else {
@@ -77,13 +90,13 @@ void Polysome::update_Rcover(size_t i)
   if (i == 0) {
     for (size_t j=0; j<ihigh; ++j) {
       if ( _Rcover[j].occupied ) {
-	cerr<<"initiating ribosome before site available! j: "<<j<<endl;
-	exit(1);
+      	cerr<<"initiating ribosome before site available! j: "<<j<<endl;
+      	exit(1);
       }
       else {
-	// occupancy 0 to 1: update time stamp
-	_Rcover[j].occupied = true;
-	_Rcover[j].tpre = t;
+      	// occupancy 0 to 1: update time stamp
+      	_Rcover[j].occupied = true;
+      	_Rcover[j].tpre = t;
       }
     }
     return;
@@ -95,84 +108,90 @@ void Polysome::update_Rcover(size_t i)
   else if (i == size()) {
     for (size_t j=ilow+1; j!=size(); ++j) {
       if ( not _Rcover[j].occupied ) {
-	cerr<<"terminating ribosome before possible! j: "<<j<<endl;
-	exit(1);
+	      cerr<<"terminating ribosome before possible! j: "<<j<<endl;
+	      exit(1);
       }
       else {
-	// occupancy 1 to 0: accumulate occupancy time
-	_Rcover[j].occupied = false;
-	_Rcover[j].tsum += t - _Rcover[j].tpre;
+	      // occupancy 1 to 0: accumulate occupancy time
+	      _Rcover[j].occupied = false;
+	      _Rcover[j].tsum += t - _Rcover[j].tpre;
       }
     }
     return;
   }
 }
 
+
 void Polysome::initiate()
 {
-  _ribosome.emplace_back(Particle{0, _rate_vec->at(1), !_tagged });
-  if (not _tagged) _tagged = true;
+  _ribosomes.emplace_back(Ribosome{0, _rate_vec->at(1), !_exists_tagged });
+  _exists_tagged = true;
   flip_codon(0);
   update_Rcover(0);
-  _event = 'i';
 }
+
 
 void Polysome::move(size_t ribo_id)
 {
-  _ribosome[ribo_id].pos++;
-  flip_codon(_ribosome[ribo_id].pos);
-  update_Rcover(_ribosome[ribo_id].pos);
-  flip_codon(_ribosome[ribo_id].pos-1);
+  _ribosomes[ribo_id].pos++;
+  flip_codon(_ribosomes[ribo_id].pos);
+  update_Rcover(_ribosomes[ribo_id].pos);
+  flip_codon(_ribosomes[ribo_id].pos-1);
 }
+
 
 void Polysome::terminate()
 {
-  if (_ribosome.front().sample_tagged) {
-    _should_check = true;
-    _tagged = false;
+  if (_ribosomes.front().is_tagged) {
+    update_steadiness();
+    _exists_tagged = false;
   }
-  _ribosome.pop_front();
-  _pep_cnt++;
-  _event = 't';
+  _ribosomes.pop_front();
+  _terminated_cnt++;
 }
+
+
+void Polysome::update_ribosome_rate(size_t ribo_id) 
+{
+  // check if a ribosome can't move
+  bool stalled;
+  if (not ribo_id) 
+    stalled = false;
+  else
+  {
+    size_t pos_diff = _ribosomes[ribo_id-1].pos - _ribosomes[ribo_id].pos;
+    stalled = (pos_diff <= Ribosome::ribosome_len);
+  }
+
+  _ribosomes.at(ribo_id).rate = (stalled ? 0 : _rate_vec->at(_ribosomes[ribo_id].pos+1));
+}
+
 
 size_t Polysome::jump_event()
 {
-  vector<double> cum_interval(_ribosome.size()+1, 0);
-  // compute cumulative intervals of all jumping events
-  // fill out the first one
-  cum_interval[0] = _ribosome[0].rate;
-  // fill out the middle part
-  size_t n = cum_interval.size();
-  for (size_t i=0; i!=n-2; ++i) {
-    cum_interval[i+1] = cum_interval[i] + _ribosome[i+1].rate;
-  }
-  // fill out the last one
-  cum_interval.back() = cum_interval[n-2];
-  // initiation possible if first cocon not occupied
-  if (_ribosome.back().pos >= Particle::ribosome_len)
-    cum_interval.back() += _rate_vec->at(0);
-  // sample jump event
-  double rand_event = _rand(_rg)*cum_interval[n-1];
+  // fill in a vector of rates, element per ribosome
+  size_t N = _ribosomes.size();
+  vector<double> ribosome_rates (N+1, 0);
+  for (int i = 0; i != N; ++i)
+    ribosome_rates[i] = _ribosomes[i].rate;
+  if (_ribosomes.back().pos >= Ribosome::ribosome_len)
+    // initiation is possible if first codon is not occupied
+    ribosome_rates.back() = (*_rate_vec)[0];
+
+  // cumulative sum
+  vector<double> cum_interval (N+1);
+  partial_sum (ribosome_rates.begin(), ribosome_rates.end(), cum_interval.begin());
+
+  // sample (choose) a ribosome to move
+  double rand_event = _rand(_rg) * cum_interval[N];
   auto lower_it = lower_bound(cum_interval.begin(), cum_interval.end(), rand_event);
-  size_t event_id = distance(cum_interval.begin(), lower_it);
-  // sample jump time
-  double u(0);
-  while (u==0) u = _rand(_rg);
-  double dt = -std::log(u)/cum_interval.back();
-  assert(!std::isinf(dt));
-  t += dt;
-  // cout<<"rate_vec: ";
-  // for (auto r: _ribosome)
-  //   cout<<r.rate<<" ";
-  // cout<<endl;
-  // cout<<"cum_vec: ";
-  // for (auto c: cum_interval)
-  //   cout<<c<<" ";
-  // cout<<endl;
-  // cout<<"rand1: "<<rand_event<<" jump event: "<<event_id<<" t "<<t<<" dt "<<dt<<" ";
-  return event_id;
+  size_t ribo_id = distance(cum_interval.begin(), lower_it);
+
+  // sample (choose) time of jump
+  t += sample_time (_rand, _rg, cum_interval.back());
+  return ribo_id;
 }
+
 
 void Polysome::update()
 {
@@ -181,91 +200,79 @@ void Polysome::update()
   // step 3: update occupancy time
   // step 4: update rate in case of stall
   // initial initiation
+
+  // empty
   if (is_empty()) {
-    double dt = -std::log(_rand(_rg))/_rate_vec->at(0);
-    t += dt;
+    t += sample_time (_rand, _rg, (*_rate_vec)[0]);
     initiate();
-    _event_id = 0;
-    //cout<<"initial initiation "<<endl;
-  } //if empty
-  // sample jump events
+    return;
+  }
+
+  size_t ribo_id = jump_event();
+
+  // initiation
+  if (ribo_id == _ribosomes.size()) {
+    initiate();
+    update_ribosome_rate(ribo_id);
+    return;
+  }
+
+  move(ribo_id);
+
+  // termination
+  if ( _ribosomes[ribo_id].pos == size() ) {
+  	terminate();
+  	// front ribosome popped out
+  	// new front guy's rate should be updated
+  	// to unstall new guy in case it was stalled by the previous guy
+  	if (not is_empty())
+      update_ribosome_rate(0);
+  }
+  // non-termination
   else {
-    size_t ribo_id = jump_event();
-    _event_id = ribo_id;
-    // initiation
-    if (ribo_id == _ribosome.size()) {
-      initiate();
-      update_transition_rate(ribo_id);
-      //cout<<"initiate "<<ribo_id<<endl;
-    } //if initiation
-    else {
-      move(ribo_id);
-      // termintation
-      if ( _ribosome[ribo_id].pos == _mRNA_len ) {
-	terminate();
-	// front ribosome popped out
-	// new front guy's rate should be updated
-	// to unstall new guy in case it was stalled by the previous guy
-	if (not is_empty())
-	  update_transition_rate(0);
-	//cout<<"terminate "<<ribo_id<<endl;
-      }
-      // elongation
-      else {
-	_event = 'e';
-	update_transition_rate(ribo_id);
-	if (ribo_id != _ribosome.size()-1)
-	  update_transition_rate(ribo_id+1);
-	//cout<<"elongate "<<ribo_id<<endl;
-      }// else non-termination
-    }// else non-initiation
-  }// else non-empty
+  	update_ribosome_rate(ribo_id);
+  	if (ribo_id != _ribosomes.size()-1)
+	    update_ribosome_rate(ribo_id+1);
+  }
 }
 
-void Polysome::compute_profile(const char type)
+
+void Polysome::compute_Aprofile()
 {
-  vector<double> *profile;
-  vector<codon_state> *codon;
-  if (type=='A') {
-    profile = &_Aprob;
-    codon = &_Acover;
-  }
-  else if (type=='R') {
-    profile = &_Rprob;
-    codon = &_Rcover;
-  }
-  else {
-    cerr<<"profile type "<<type<<" not supported! fail to compute Polysome::compute_profile()!"<<endl;
-    exit(1);
-  }
   for (size_t i=0; i!=size(); ++i)
-    (*profile)[i] =  ((*codon)[i].tsum + (*codon)[i].occupied * (t - (*codon)[i].tpre))/t;
+    _Aprob[i] = (_Acover[i].tsum + _Acover[i].occupied * (t - _Acover[i].tpre))/t;
 }
 
-void Polysome::update_profile(const char type)
-{
-  vector<double> *p, *ppre;
-  if (type=='A') {
-    p = &_Aprob;
-    ppre = &_Aprob_pre;
-  }
-  else if (type=='R') {
-    p = &_Rprob;
-    ppre = &_Rprob_pre;
-  }
-  else {
-    cerr<<"profile type "<<type<<" not supported! fail to compute Polysome::update_profile()!"<<endl;
-    exit(1);
 
-  }
-  (*ppre).swap(*p);
-  compute_profile(type);
+void Polysome::compute_Rprofile()
+{
+  for (size_t i=0; i!=size(); ++i)
+    _Rprob[i] = (_Rcover[i].tsum + _Rcover[i].occupied * (t - _Rcover[i].tpre))/t;
 }
 
-bool Polysome::check_steady(double eps)
+
+void Polysome::update_Aprofile()
 {
-  update_profile('R');
-  update_profile('A');
+  (_Aprob_pre).swap(_Aprob);
+  compute_Aprofile();
+}
+
+
+void Polysome::update_Rprofile()
+{
+  (_Rprob_pre).swap(_Rprob);
+  compute_Rprofile();
+}
+
+
+void Polysome::update_steadiness (double eps0)
+{
+  // normalize threshold on length and density of RNA
+  compute_Aprofile();
+  double eps = median(_Aprob) * eps0;
+
+  update_Rprofile();
+  update_Aprofile();
   double dpdt = euclidean_dist(_Aprob, _Aprob_pre)/(t - _tpre);
   if (dpdt<0) {
     cout<<"profile: ";
@@ -277,65 +284,30 @@ bool Polysome::check_steady(double eps)
     cout<<"\nt: "<<t<<" tpre: "<<_tpre<<endl;
     exit(1);
   }
-  _should_check = false;
   _tpre = t;
-  return dpdt<eps;
-}
-
-double Polysome::set_dpdt_threshold(double eps)
-{
-  compute_profile('A');
-  double scale(median(_Aprob));
-  return scale*eps;
-}
-
-
-bool Polysome::done_burn_in()
-{
-  // reference: The effect of tRNA levels on decoding times of mRNA codon
-  return _pep_cnt > 200;
-}
-
-
-void Polysome::start_sample()
-{
-  _steady = false;
-  iteration=0;
-  // t = 0;
-  // _tpre = 0;
-  // for (auto& c: _Acover) {
-  //   c.tpre = 0;
-  //   c.tsum = 0;
-  // }
-  // for (auto& c: _Rcover) {
-  //   c.tpre = 0;
-  //   c.tsum = 0;
-  // }
+  _steady = dpdt < eps;
 }
 
 
 void Polysome::run()
 {
-  if ( Particle::ribosome_len < _Asite ) {
-    cerr<<"A-site not within ribosome! A: "<<_Asite<<" ribolen: "<<Particle::ribosome_len<<endl;
+  if ( Ribosome::ribosome_len < Ribosome::Asite ) {
+    cerr<<"A-site not within ribosome! A: "<<Ribosome::Asite<<" ribolen: "<<Ribosome::ribosome_len<<endl;
     exit(1);
   }
   // burn in
-  while (not done_burn_in()) {
+  while (_terminated_cnt <= 200) {
     update();
     iteration++;
   }
   // reset states
-  start_sample();
+  _steady = false;
+  iteration=0;
   // collect data again
   double threshold(0);
-  while(not done_sample()) {
+  while (not (_steady and iteration>size()*100)) {
     update();
     iteration++;
-    if (_should_check) {
-      threshold = set_dpdt_threshold(0.05);
-      _steady = check_steady(threshold);
-    }
   }
 }
 
