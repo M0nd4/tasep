@@ -9,7 +9,7 @@
 #include "utils.hpp"
 #include "math_utils.hpp"
 
-mt19937_64 Polysome::_rg(SEED);
+mt19937_64 polysome::_rg(SEED);
 
 
 double sample_time (uniform_real_distribution<double>& rand, 
@@ -31,7 +31,7 @@ ostream& operator<<(ostream& os, const Codon& c) {
 }
 
 
-Polysome::Polysome(const vector<double> *rate_vec): 
+polysome::polysome(const vector<double> *rate_vec): 
   _rate_vec  (rate_vec), 
   _mRNA_len  (rate_vec->size()-1),
   _Acover    (_mRNA_len+1, Codon{false, 0, 0}),
@@ -44,7 +44,7 @@ Polysome::Polysome(const vector<double> *rate_vec):
 { }
 
 
-void Polysome::flip_codon(size_t i)
+void polysome::flip_codon(size_t i)
 {
   // update Asite occupancy
   if (_Acover[i].occupied)
@@ -54,7 +54,7 @@ void Polysome::flip_codon(size_t i)
 }
 
 
-void Polysome::update_Rcover(size_t i)
+void polysome::update_Rcover(size_t i)
 {
   // update ribosome occupancy
   int ilow(i-Ribosome::Asite), ihigh(i+Ribosome::ribosome_len-Ribosome::Asite);
@@ -122,7 +122,7 @@ void Polysome::update_Rcover(size_t i)
 }
 
 
-void Polysome::initiate()
+void polysome::initiate()
 {
   _ribosomes.emplace_back(Ribosome{0, _rate_vec->at(1), !_exists_tagged });
   _exists_tagged = true;
@@ -131,7 +131,7 @@ void Polysome::initiate()
 }
 
 
-void Polysome::move(size_t ribo_id)
+void polysome::move(size_t ribo_id)
 {
   _ribosomes[ribo_id].pos++;
   flip_codon(_ribosomes[ribo_id].pos);
@@ -140,7 +140,7 @@ void Polysome::move(size_t ribo_id)
 }
 
 
-void Polysome::terminate()
+void polysome::terminate()
 {
   if (_ribosomes.front().is_tagged) {
     update_steadiness();
@@ -151,7 +151,7 @@ void Polysome::terminate()
 }
 
 
-void Polysome::update_ribosome_rate(size_t ribo_id) 
+void polysome::update_ribosome_rate(size_t ribo_id) 
 {
   // check if a ribosome can't move
   bool stalled;
@@ -167,7 +167,7 @@ void Polysome::update_ribosome_rate(size_t ribo_id)
 }
 
 
-size_t Polysome::jump_event()
+size_t polysome::jump_event()
 {
   // fill in a vector of rates, element per ribosome
   size_t N = _ribosomes.size();
@@ -193,7 +193,7 @@ size_t Polysome::jump_event()
 }
 
 
-void Polysome::update()
+void polysome::update()
 {
   // step 1: choose a jump event
   // step 2: update ribosome position
@@ -237,35 +237,35 @@ void Polysome::update()
 }
 
 
-void Polysome::compute_Aprofile()
+void polysome::compute_Aprofile()
 {
   for (size_t i=0; i!=size(); ++i)
     _Aprob[i] = (_Acover[i].tsum + _Acover[i].occupied * (t - _Acover[i].tpre))/t;
 }
 
 
-void Polysome::compute_Rprofile()
+void polysome::compute_Rprofile()
 {
   for (size_t i=0; i!=size(); ++i)
     _Rprob[i] = (_Rcover[i].tsum + _Rcover[i].occupied * (t - _Rcover[i].tpre))/t;
 }
 
 
-void Polysome::update_Aprofile()
+void polysome::update_Aprofile()
 {
   (_Aprob_pre).swap(_Aprob);
   compute_Aprofile();
 }
 
 
-void Polysome::update_Rprofile()
+void polysome::update_Rprofile()
 {
   (_Rprob_pre).swap(_Rprob);
   compute_Rprofile();
 }
 
 
-void Polysome::update_steadiness (double eps0)
+void polysome::update_steadiness (double eps0)
 {
   // normalize threshold on length and density of RNA
   compute_Aprofile();
@@ -289,7 +289,7 @@ void Polysome::update_steadiness (double eps0)
 }
 
 
-void Polysome::run()
+void polysome::run()
 {
   if ( Ribosome::ribosome_len < Ribosome::Asite ) {
     cerr<<"A-site not within ribosome! A: "<<Ribosome::Asite<<" ribolen: "<<Ribosome::ribosome_len<<endl;

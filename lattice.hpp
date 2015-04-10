@@ -31,11 +31,11 @@ struct Codon {
 ostream& operator<<(ostream& os, const Codon& c); 
 
 
-class Polysome {
+class polysome {
 public:
   double t = 0;        // current time in sec
   int iteration = 0;
-  Polysome(const vector<double> *rate_vec);
+  polysome(const vector<double> *rate_vec);
   size_t size() const { return _mRNA_len; } 
   const vector<double>& get_Aprob() const { return _Aprob; }
   const vector<double>& get_Rprob() const { return _Rprob; }

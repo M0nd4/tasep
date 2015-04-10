@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 
   shared_ptr<vector<double>> rate_vec=make_rate_vec(10, 0.1, 100);
   (*rate_vec)[0] = 10;
-  Polysome p(&*rate_vec);
+  polysome p(&*rate_vec);
   p.run();
   // print to a string
   ostringstream ss_result;
@@ -48,6 +48,8 @@ int main(int argc, char **argv)
   // write output to file 
   ofstream ofs (outPath);
   ofs << ss_result.str() << flush;
+
+  double* rates = &(*rate_vec)[0];
 
   return 0;
 }

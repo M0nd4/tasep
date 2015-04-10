@@ -1,18 +1,27 @@
 CXX = g++
-CXXFLAGS = -std=c++11 -O3 -Wno-deprecated-declarations
+CXXFLAGS = -std=c++11 -O3 -Wno-deprecated-declarations -DSEQAN_HAS_ZLIB=1 -DSEQAN_HAS_BZIP2=1 # -fopenmp
+INC = -I/usr/local/include -I$(HOME)/local/include
+CXXFLAGS += $(INC)
 COMPILE.c = $(CXX) $(CXXFLAGS)
-LDFLAGS = 
+LDFLAGS = -lz -lbz2 -pthread -lpthread #-fopenmp
+OUTPUT_OPTION = -o $@
 
-all: build/tasep_playground
+all: footprint_generator tasep_playground
 clean:
-	rm -f build/*.o build/tasep_playground
+	rm -f *.o footprint_generator tasep_playground
 
-build/tasep_playground: build/tasep_playground.o build/lattice.o
-	$(COMPILE.c) $(LDFLAGS) -o build/tasep_playground build/tasep_playground.o build/lattice.o
+footprint_generator: footprint_generator.o reference_info_builder.o ribomap_profiler.o transcript_model.o utils.o lattice.o
+	$(COMPILE.c) $(OUTPUT_OPTION) $^ $(LDFLAGS)
 	chmod u+x $@
 
-build/tasep_playground.o: src/tasep_playground.cpp src/lattice.hpp src/utils.hpp
-	$(COMPILE.c) -c -o build/tasep_playground.o src/tasep_playground.cpp
+tasep_playground: lattice.o tasep_playground.o utils.o
+	$(COMPILE.c) $(OUTPUT_OPTION) $^ $(LDFLAGS)
+	chmod u+x $@
 
-build/lattice.o: src/lattice.cpp src/lattice.hpp src/utils.hpp src/math_utils.hpp
-	$(COMPILE.c) -c -o build/lattice.o src/lattice.cpp
+
+utils.o: utils.cpp utils.hpp 
+bam_parser.o: bam_parser.cpp reference_info_builder.hpp ribomap_profiler.hpp bam_parser.hpp utils.hpp
+reference_info_builder.o: reference_info_builder.cpp reference_info_builder.hpp utils.hpp
+ribomap_profiler.o: ribomap_profiler.cpp reference_info_builder.hpp ribomap_profiler.hpp bam_parser.hpp
+footprint_generator.o: footprint_generator.cpp reference_info_builder.hpp ribomap_profiler.hpp transcript_model.hpp utils.hpp lattice.hpp
+lattice.o: lattice.cpp lattice.hpp utils.hpp math_utils.hpp

@@ -2,6 +2,12 @@ data
 results
 build
 
+# binaries that for some reason are right here, with sources
+##################
+tasep_playground
+footprint_generator
+
+
 # temporary from gedit
 ##################
 *~
