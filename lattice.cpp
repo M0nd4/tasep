@@ -295,6 +295,7 @@ void polysome::run()
     cerr<<"A-site not within ribosome! A: "<<Ribosome::Asite<<" ribolen: "<<Ribosome::ribosome_len<<endl;
     exit(1);
   }
+  /*
   // burn in
   while (_terminated_cnt <= 200) {
     update();
@@ -303,6 +304,7 @@ void polysome::run()
   // reset states
   _steady = false;
   iteration=0;
+  */
   // collect data again
   double threshold(0);
   while (not (_steady and iteration>size()*100)) {

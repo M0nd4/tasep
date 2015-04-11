@@ -1,9 +1,9 @@
 CXX = g++
-CXXFLAGS = -std=c++11 -O3 -Wno-deprecated-declarations -DSEQAN_HAS_ZLIB=1 -DSEQAN_HAS_BZIP2=1 # -fopenmp
+CXXFLAGS = -std=c++11 -O3 -Wno-deprecated-declarations -DSEQAN_HAS_ZLIB=1 -DSEQAN_HAS_BZIP2=1 -fopenmp
 INC = -I/usr/local/include -I$(HOME)/local/include -I.
 CXXFLAGS += $(INC)
 COMPILE.c = $(CXX) $(CXXFLAGS)
-LDFLAGS = -lz -lbz2 -pthread -lpthread #-fopenmp
+LDFLAGS = -lz -lbz2 -pthread -lpthread -fopenmp
 OUTPUT_OPTION = -o $@
 
 all: footprint_generator tasep_playground
