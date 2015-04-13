@@ -20,9 +20,9 @@ tasep_playground: lattice.o tasep_playground.o utils.o
 	chmod u+x $@
 
 cuda: tasep_playground cu_lattice.cu
-	$(NVCC) -c -o cu_lattice.o cu_lattice.cu
+	$(NVCC) -c -arch=sm_20 -o cu_lattice.o cu_lattice.cu
 	$(COMPILE.c) -c -o cu_tasep_playground.o cu_tasep_playground.cpp
-	$(COMPILE.c) -o cu_tasep_playground cu_lattice.o utils.o cu_tasep_playground.o $(LDFLAGS)
+	$(COMPILE.c) -o cu_tasep_playground cu_lattice.o utils.o cu_tasep_playground.o $(LDFLAGS) -lcudart -L $(CUDA_HOME)/lib64 
 
 
 

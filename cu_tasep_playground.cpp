@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 
   shared_ptr<vector<double>> rate_vec=make_rate_vec(10, 0.1, 100);
   (*rate_vec)[0] = 10;
-  runSinglePolysome (&rate_vec[0], rate_vec.size());
+  runSinglePolysome (&(*rate_vec)[0], rate_vec->size());
   return 0;
 }
 
