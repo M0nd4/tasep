@@ -3,6 +3,7 @@ CXXFLAGS = -std=c++11 -O3 -Wno-deprecated-declarations -DSEQAN_HAS_ZLIB=1 -DSEQA
 INC = -I/usr/local/include -I$(HOME)/local/include -I.
 CXXFLAGS += $(INC)
 COMPILE.c = $(CXX) $(CXXFLAGS)
+NVCC = nvcc
 LDFLAGS = -lz -lbz2 -pthread -lpthread -fopenmp
 OUTPUT_OPTION = -o $@
 
@@ -17,6 +18,13 @@ footprint_generator: footprint_generator.o reference_info_builder.o ribomap_prof
 tasep_playground: lattice.o tasep_playground.o utils.o
 	$(COMPILE.c) $(OUTPUT_OPTION) $^ $(LDFLAGS)
 	chmod u+x $@
+
+cuda: tasep_playground cu_lattice.cu
+	$(NVCC) -c -o cu_lattice.o cu_lattice.cu
+	$(COMPILE.c) -c -o cu_tasep_playground.o cu_tasep_playground.cpp
+	$(COMPILE.c) -o cu_tasep_playground cu_lattice.o utils.o cu_tasep_playground.o $(LDFLAGS)
+
+
 
 
 utils.o: utils.cpp utils.hpp 
