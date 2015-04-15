@@ -1,3 +1,4 @@
 
+#include <vector>
 
-void runSinglePolysome (double* rates, int length);
+void runSinglePolysome (const std::vector<double>& rates, double initRate);

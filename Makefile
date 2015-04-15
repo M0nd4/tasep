@@ -19,15 +19,19 @@ tasep_playground: lattice.o tasep_playground.o utils.o
 	$(COMPILE.c) $(OUTPUT_OPTION) $^ $(LDFLAGS)
 	chmod u+x $@
 
-cuda: tasep_playground cu_lattice.cu
-	$(NVCC) -c -arch=sm_20 -o cu_lattice.o cu_lattice.cu
-	$(COMPILE.c) -c -o cu_tasep_playground.o cu_tasep_playground.cpp
+cuda: cu_lattice.o utils.o cu_tasep_playground.o
 	$(COMPILE.c) -o cu_tasep_playground cu_lattice.o utils.o cu_tasep_playground.o $(LDFLAGS) -lcudart -L $(CUDA_HOME)/lib64 
 
+cu_lattice.o: cu_lattice.cu cu_lattice.hpp
+	$(NVCC) -c -arch=sm_20 -o cu_lattice.o cu_lattice.cu
 
-
+cu_tasep_playground.o: cu_tasep_playground.cpp
+	$(COMPILE.c) -c -o cu_tasep_playground.o cu_tasep_playground.cpp
 
 utils.o: utils.cpp utils.hpp 
+	$(COMPILE.c) -c -o utils.o utils.cpp
+
+
 bam_parser.o: bam_parser.cpp reference_info_builder.hpp ribomap_profiler.hpp bam_parser.hpp utils.hpp
 reference_info_builder.o: reference_info_builder.cpp reference_info_builder.hpp utils.hpp
 ribomap_profiler.o: ribomap_profiler.cpp reference_info_builder.hpp ribomap_profiler.hpp bam_parser.hpp

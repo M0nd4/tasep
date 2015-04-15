@@ -27,9 +27,8 @@ int main(int argc, char **argv)
   string outPath   = cmdOutPath.getValue();
   int    verbose   = cmdVerbose.getValue();
 
-  shared_ptr<vector<double>> rate_vec=make_rate_vec(10, 0.1, 100);
-  (*rate_vec)[0] = 10;
-  runSinglePolysome (&(*rate_vec)[0], rate_vec->size());
+  shared_ptr<vector<double>> rate_vec=make_rate_vec(10, 0.1, 99);
+  runSinglePolysome (*rate_vec, 10);
   return 0;
 }
 

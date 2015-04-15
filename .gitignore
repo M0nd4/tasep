@@ -6,6 +6,7 @@ build
 ##################
 tasep_playground
 footprint_generator
+cu_tasep_playground
 
 
 # temporary from gedit
