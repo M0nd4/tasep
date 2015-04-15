@@ -56,7 +56,14 @@ int main(int argc, char **argv)
         cout << endl;
     }
 
-    runSinglePolysome (*rate_vec, 1);
+    vector<double> probs = runSinglePolysome (rate_vec, 1);
+
+    // write results
+    ofstream ofs (outPath.c_str());
+    for (int i = 0; i != probs.size(); ++i)
+        ofs << probs[i] << endl;
+    ofs.close();
+
     return 0;
 }
 

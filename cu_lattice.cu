@@ -95,13 +95,17 @@ void computePolysome (double* rates, bool* cover, int length, int padding)
 
 using namespace std;
 
-void runSinglePolysome (const vector<double>& rates, double initRate)
+
+vector<double> runSinglePolysome (const vector<double>& rates, double initRate)
 {
     int padding = 1;
 
     // pad the vector
     int length = rates.size();
     int lengthPadded = length + padding;
+
+    cout << "length: " << length << endl;
+    cout << "padding: " << padding << endl;
 
     // init codons
     thrust::device_vector<Codon> codonsVector (lengthPadded);
@@ -179,4 +183,13 @@ void runSinglePolysome (const vector<double>& rates, double initRate)
 
     }
 
+    const int epoch = 1;
+    vector<double> probs (length);
+    for (int i = 0; i != probs.size(); ++i)
+    {
+        Codon codon = codonsVector[i+padding];
+        probs[i] = codon.accumtime / epoch;
+    }
+
+    return probs;
 }
