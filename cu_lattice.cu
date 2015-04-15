@@ -100,9 +100,8 @@ void runSinglePolysome (const vector<double>& rates, double initRate)
     int padding = 1;
 
     // pad the vector
-    int length = 9;
-    int lengthPadded = 10;
-    //int lengthPadded = rates.size() + padding * 2;
+    int length = rates.size();
+    int lengthPadded = length + padding;
 
     // init codons
     thrust::device_vector<Codon> codonsVector (lengthPadded);
@@ -130,9 +129,9 @@ void runSinglePolysome (const vector<double>& rates, double initRate)
     Ribosome* deviceRibosomes = thrust::raw_pointer_cast( &ribosomesVector[0] );
 
     // setup seeds
-    curandState* devStates;
-    cudaMalloc ( &devStates, numRibosomes * sizeof(curandState) );
-    setupRand <<< 1, numRibosomes >>> ( devStates, time(NULL) );    
+    curandState* deviceStates;
+    cudaMalloc ( &deviceStates, numRibosomes * sizeof(curandState) );
+    setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );    
         
     //cout << "iteration   codon.occupied   codon.time   ribosome.pos   ribosome.time" << endl;
     cout << "iteration   codon.occupied   codon.accumtime" << endl;
@@ -176,7 +175,7 @@ void runSinglePolysome (const vector<double>& rates, double initRate)
 
         updatePolysome 
             <<< 1, numRibosomes, 0 >>> 
-            (deviceCodons, deviceRibosomes, lengthPadded, devStates);
+            (deviceCodons, deviceRibosomes, lengthPadded, deviceStates);
 
     }
 
