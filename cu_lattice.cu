@@ -46,39 +46,52 @@ double sampleTime (double rate, curandState* globalState)
 
 //__host__ __device__ inline static
 __global__ static 
-void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, curandState* globalState )
+void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoch, curandState* globalState)
 {
     // copy ribosom data from global memory to registers
     int riboId = threadIdx.x;
     int nextId = (riboId + blockDim.x - 1) % blockDim.x;
     Ribosome ribo     = ribosomes[riboId];
-    Ribosome riboNext = ribosomes[nextId];
+    Ribosome nextribo = ribosomes[nextId];
+
+    // copy codon data from global memory to registers
+    int pos = ribo.pos;
+    int nextpos = (pos + length + 1) % length;
+    Codon codon = codons[pos];
+    Codon nextcodon = codons[nextpos];
     __syncthreads();
 
-    // get the position of the next and previous ribosomes
-    bool nextIsFar = (riboNext.pos - ribo.pos + length) % length > 1 || (ribo.pos != 0 && riboNext.pos == 0);
+    // update current time with time of the next codon
+    double t0 = max(codon.time, nextcodon.time);
+    ribosomes[riboId].time = t0;
+    codons[pos].accumtime += t0 - codon.time; 
+    codons[pos].time = t0;
+    
+    // do not jump if can not
+    bool nextIsFar = (nextribo.pos - pos + length) % length > 1 || (pos != 0 && nextribo.pos == 0); 
     if (!nextIsFar) return;
 
-    // sample the period
-    double dt = sampleTime(codons[ribo.pos].rate, globalState);
+   // sample the period
+    double dt = sampleTime(codon.rate, globalState);
+    dt = min(dt, epoch - t0);     // when about to finish
+    double t = t0 + dt;
+
+    // update times of the ribo and of the codon
+    codons[pos].accumtime += dt;
+    ribosomes[riboId].time = t;
+    codons[pos].time = t;         // for the next ribosome
+    codons[nextpos].time = t;     // for computing time of occupancy by next ribosome
+
+    // finish simulation for this ribo when time reaches the epoch
+    if (t >= epoch) return;
 
     // flip two codons and update the ribosome position
-    int newpos = (ribo.pos + length + 1) % length;
-    codons[newpos].occupied = true;
-    codons[ribo.pos].occupied = false;
-    ribosomes[riboId].pos = newpos;
+    codons[nextpos].occupied = true;
+    codons[pos].occupied = false;
+    ribosomes[riboId].pos = nextpos;
 
-    // wait for the following codon to clear (if necessary), then add dt
-    double t = max(ribo.time, codons[newpos].time) + dt;
-    // find the occupied time
-    codons[ribo.pos].accumtime += (t - codons[ribo.pos].time);
-    // update its own time and the time of the codon
-    ribosomes[riboId].time = t;
-    codons[ribo.pos].time = t;   // for the next ribosome
-    codons[newpos].time = t;     // for computing time of occupancy by next ribosome
-
-    // take care of the border
-    if (ribo.pos == length - 1)
+     // take care of the border
+    if (pos == length - 1)
     {
         ribosomes[riboId].time = 0;
         codons[0].time = 0;
@@ -96,7 +109,7 @@ void computePolysome (double* rates, bool* cover, int length, int padding)
 using namespace std;
 
 
-vector<double> runSinglePolysome (const vector<double>& rates, double initRate)
+vector<double> runSinglePolysome (const vector<double>& rates, double initRate, double epoch, int verbose)
 {
     int padding = 1;
 
@@ -132,16 +145,29 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate)
     ribosomesVector[0] = ribo10;
     Ribosome* deviceRibosomes = thrust::raw_pointer_cast( &ribosomesVector[0] );
 
-    // setup seeds
+    // set up seeds
     curandState* deviceStates;
     cudaMalloc ( &deviceStates, numRibosomes * sizeof(curandState) );
     setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );    
-        
-    //cout << "iteration   codon.occupied   codon.time   ribosome.pos   ribosome.time" << endl;
-    cout << "iteration   codon.occupied   codon.accumtime" << endl;
-    for (int it = 0; it != 30; ++it)
+    
+    const int MaxIter = 100;
+    for (int it = 0; it != MaxIter; ++it)
     {
-        cout << "iteration " << it << ": " << flush;
+        // stop condition
+        int countNonactive = 0;
+        for (int i = 0; i != numRibosomes; ++i)
+        {
+            Ribosome ribo = ribosomesVector[i];
+            if (ribo.time >= epoch || ribo.pos == 0)
+                ++countNonactive;
+        }
+        int countActive = ribosomesVector.size() - countNonactive;
+        if (countActive == 0) break;
+
+        if (verbose)
+        {
+        cout << "iteration " << it << ", " 
+             << "active ribos " << countActive << ":   " << flush;
         for (int i = 0; i != lengthPadded; ++i)
         {
             Codon codon = codonsVector[i];
@@ -169,21 +195,20 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate)
         }
         */
         cout << "    ";
-        for (int i = 0; i != lengthPadded; ++i)
+        for (int i = padding; i != lengthPadded; ++i)
         {
             Codon codon = codonsVector[i];
             cout << setprecision(3) << codon.accumtime << " ";
         }
-        
         cout << endl;
+        }
 
         updatePolysome 
             <<< 1, numRibosomes, 0 >>> 
-            (deviceCodons, deviceRibosomes, lengthPadded, deviceStates);
+            (deviceCodons, deviceRibosomes, lengthPadded, epoch, deviceStates);
 
     }
 
-    const int epoch = 1;
     vector<double> probs (length);
     for (int i = 0; i != probs.size(); ++i)
     {

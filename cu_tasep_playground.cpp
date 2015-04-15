@@ -40,11 +40,13 @@ int main(int argc, char **argv)
     // describe arguments
     ValueArg<string> cmdRatesPath ("", "rates", "path of rates", true, "", "string", cmd);
     ValueArg<string> cmdOutPath ("", "out", "path of output", false, "/dev/null", "string", cmd);
+    ValueArg<double> cmdEpoch ("", "epoch", "time to finish simulation", false, 10, "double", cmd);
     MultiSwitchArg   cmdVerbose ("v", "verbose", "verbosity level", cmd);
     // parse arguments
     cmd.parse(argc, argv);
     string ratesPath = cmdRatesPath.getValue();
     string outPath   = cmdOutPath.getValue();
+    double epoch     = cmdEpoch.getValue();
     int    verbose   = cmdVerbose.getValue();
 
     vector<double> rate_vec = loadRates (ratesPath);
@@ -56,7 +58,7 @@ int main(int argc, char **argv)
         cout << endl;
     }
 
-    vector<double> probs = runSinglePolysome (rate_vec, 1);
+    vector<double> probs = runSinglePolysome (rate_vec, 1, epoch, verbose);
 
     // write results
     ofstream ofs (outPath.c_str());
