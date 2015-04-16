@@ -166,14 +166,13 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
 
         if (verbose)
         {
-        cout << "iteration " << it << ", " 
-             << "active ribos " << countActive << ":   " << flush;
+        cout << setw(2) <<  it << "  &  " << countActive << "  &   " << flush;
         for (int i = 0; i != lengthPadded; ++i)
         {
             Codon codon = codonsVector[i];
             cout << (codon.occupied ? '*' : '.');
         }
-        cout << "    ";
+        cout << "  &  ";
         /*
         {
             Codon codon = codonsVector[i];
@@ -194,13 +193,12 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
             cout << setprecision(3) << ribosome.time << " ";
         }
         */
-        cout << "    ";
         for (int i = padding; i != lengthPadded; ++i)
         {
             Codon codon = codonsVector[i];
-            cout << setprecision(3) << codon.accumtime << " ";
+            cout << setprecision(2) << setw(2) << codon.accumtime << " ";
         }
-        cout << endl;
+        cout << " \\\\" << endl;
         }
 
         updatePolysome 
