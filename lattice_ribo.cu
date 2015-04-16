@@ -1,4 +1,4 @@
-#include "cu_lattice.hpp"
+#include "lattice.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
