@@ -11,20 +11,6 @@
 
 #include <iomanip>
 
-struct Ribosome {
-    double time;
-    int pos;
-};
-
-
-struct Codon {
-    double time;
-    double rate;
-    bool occupied;
-    double accumtime;
-};
-
-
 __global__ static 
 void setupRand ( curandState * state, unsigned long seed )
 {

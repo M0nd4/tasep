@@ -1,10 +1,11 @@
+OPENMPFLAG ?= -fopenmp
 CXX = g++
-CXXFLAGS = -std=c++11 -O3 -Wno-deprecated-declarations -DSEQAN_HAS_ZLIB=1 -DSEQAN_HAS_BZIP2=1 -fopenmp
+CXXFLAGS = -std=c++11 -O3 -Wno-deprecated-declarations -DSEQAN_HAS_ZLIB=1 -DSEQAN_HAS_BZIP2=1 ${OPENMPFLAG}
 INC = -I/usr/local/include -I$(HOME)/local/include -I.
 CXXFLAGS += $(INC)
 COMPILE.c = $(CXX) $(CXXFLAGS)
 NVCC = nvcc
-LDFLAGS = -lz -lbz2 -pthread -lpthread -fopenmp
+LDFLAGS = -lz -lbz2 -pthread -lpthread ${OPENMPFLAG}
 OUTPUT_OPTION = -o $@
 
 all: footprint_generator tasep_playground
@@ -19,14 +20,26 @@ tasep_playground: lattice.o tasep_playground.o utils.o
 	$(COMPILE.c) $(OUTPUT_OPTION) $^ $(LDFLAGS)
 	chmod u+x $@
 
-cuda: cu_lattice.o utils.o cu_tasep_playground.o
-	$(COMPILE.c) -o cu_tasep_playground cu_lattice.o utils.o cu_tasep_playground.o $(LDFLAGS) -lcudart -L $(CUDA_HOME)/lib64 
 
-cu_lattice.o: cu_lattice.cu cu_lattice.hpp
-	$(NVCC) -c -arch=sm_20 -o cu_lattice.o cu_lattice.cu
 
-cu_tasep_playground.o: cu_tasep_playground.cpp
-	$(COMPILE.c) -c -o cu_tasep_playground.o cu_tasep_playground.cpp
+cuda: lattice_ribo.o utils.o tasep_playground.o
+	$(COMPILE.c) -o tasep_playground lattice_ribo.o utils.o tasep_playground.o $(LDFLAGS) -lcudart -L $(CUDA_HOME)/lib64 
+
+lattice_ribo.o: lattice_ribo.cu lattice.hpp
+	$(NVCC) -c -arch=sm_20 -o lattice_ribo.o lattice_ribo.cu
+
+
+
+single: lattice_single.o utils.o tasep_playground.o
+	$(COMPILE.c) -o tasep_playground lattice_single.o utils.o tasep_playground.o $(LDFLAGS)
+
+lattice_single.o: lattice_single.cpp lattice.hpp
+	$(COMPILE.c) -c -o lattice_single.o lattice_single.cpp
+
+
+
+tasep_playground.o: tasep_playground.cpp
+	$(COMPILE.c) -c -o tasep_playground.o tasep_playground.cpp
 
 utils.o: utils.cpp utils.hpp 
 	$(COMPILE.c) -c -o utils.o utils.cpp

@@ -3,62 +3,94 @@
 #include <memory>
 #include <sstream>
 #include <fstream>
-#include "lattice.hpp" 
-#include "utils.hpp"
+#include <iomanip>
 
 #include <tclap/CmdLine.h>
+
+#include "lattice.hpp" 
 
 using namespace std;
 using namespace TCLAP;
 
-shared_ptr<vector<double>> make_rate_vec(double rfast, double rslow, size_t rlen);
+
+vector<double> loadRates (const string& ratesPath)
+{
+    vector<double> rates;
+    ifstream ifs (ratesPath.c_str());
+    istringstream iss;
+    string s;
+    double d;
+    while (ifs)
+    {
+        ifs >> s;
+        iss.str(s);
+        iss >> d;
+        rates.push_back(d);
+        iss.clear();
+    }
+    ifs.close();
+    return rates;
+}
+
 
 int main(int argc, char **argv)
 {
-  // init the parser
-  CmdLine cmd ("run experiment, and compare to stored file");
-  // describe arguments
-  ValueArg<string> cmdTruthPath ("", "truth", "path of ground truth", true, "", "string", cmd);
-  ValueArg<string> cmdOutPath ("", "out", "path of output", false, "/dev/null", "string", cmd);
-  MultiSwitchArg   cmdVerbose ("v", "verbose", "verbosity level", cmd);
-  // parse arguments
-  cmd.parse(argc, argv);
-  string truthPath = cmdTruthPath.getValue();
-  string outPath   = cmdOutPath.getValue();
-  int    verbose   = cmdVerbose.getValue();
+    // init the parser
+    CmdLine cmd ("run experiment, and compare to stored file");
+    // describe arguments
+    ValueArg<string> cmdRatesPath ("", "rates", "path of rates", true, "", "string", cmd);
+    ValueArg<string> cmdTruthPath ("", "truth", "path of ground truth", false, "", "string", cmd);
+    ValueArg<string> cmdOutPath ("", "out", "path of output", false, "/dev/null", "string", cmd);
+    ValueArg<double> cmdEpoch ("", "epoch", "time to finish simulation", false, 10, "double", cmd);
+    MultiSwitchArg   cmdVerbose ("v", "verbose", "verbosity level", cmd);
+    // parse arguments
+    cmd.parse(argc, argv);
+    string ratesPath = cmdRatesPath.getValue();
+    string truthPath = cmdTruthPath.getValue();
+    string outPath   = cmdOutPath.getValue();
+    double epoch     = cmdEpoch.getValue();
+    int    verbose   = cmdVerbose.getValue();
 
-  shared_ptr<vector<double>> rate_vec=make_rate_vec(10, 0.1, 100);
-  (*rate_vec)[0] = 10;
-  polysome p(&*rate_vec);
-  p.run();
-  // print to a string
-  ostringstream ss_result;
-  ss_result <<"A: "<<p.get_Aprob()<<endl;
-  ss_result <<"R: "<<p.get_Rprob()<<endl;
-  // load ground truth
-  ifstream ifs (truthPath);
-  stringstream ss_truth;
-  ss_truth << ifs.rdbuf();
-  // compare the current result and the saved file. 
-  // TODO: I'm expecting problems with cross-platform line endings differences
-  if (ss_result.str() == ss_truth.str())
-    cout << "passed" << endl;
-  else
-    cout << "failed" << endl;    
-  // write output to file 
-  ofstream ofs (outPath);
-  ofs << ss_result.str() << flush;
+    vector<double> rate_vec = loadRates (ratesPath);
+    if (verbose >= 2)
+    {
+        cout << "rates: ";
+        for (int i = 0; i != rate_vec.size(); ++i)
+            cout << setprecision(3) << rate_vec[i] << " ";
+        cout << endl;
+    }
 
-  double* rates = &(*rate_vec)[0];
+    vector<double> probs = runSinglePolysome (rate_vec, 1, epoch, verbose);
 
-  return 0;
+    // write results
+    ofstream ofs (outPath.c_str());
+    ostringstream oss;
+    for (int i = 0; i != probs.size(); ++i)
+    {
+        ofs << probs[i] << endl;
+        oss << probs[i] << endl;
+    }
+    ofs.close();
+
+    // load ground truth
+    if (truthPath != "")
+    {
+        ifstream ifs (truthPath);
+        stringstream ss_truth;
+        ss_truth << ifs.rdbuf();
+        // compare the current result and the saved file. 
+        // TODO: I'm expecting problems with cross-platform line endings differences
+        if (oss.str() == ss_truth.str())
+            cout << "passed" << endl;
+        else
+            cout << "failed" << endl;    
+        // write output to file 
+        ofstream ofs (outPath);
+        ofs << oss.str() << flush;
+    }
+
+    return 0;
 }
 
-shared_ptr<vector<double>> make_rate_vec(double rfast, double rslow, size_t rlen)
-{
-  shared_ptr<vector<double>> rate_vec(new vector<double>(rlen,rfast));
-  size_t mid(rlen/2);
-  (*rate_vec)[mid] = rslow;
-  return rate_vec;
-}
+
 
