@@ -122,7 +122,7 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
 
     // init ribosomes
     //const int RiboWidth = 10;
-    const int numRibosomes = 10;//((lengthPadded - 1) / 32 / RiboWidth + 1) * 32;
+    const int numRibosomes = lengthPadded;//((lengthPadded - 1) / 32 / RiboWidth + 1) * 32;
     cout << "numRibosomes: " << numRibosomes << endl;
     thrust::device_vector<Ribosome> ribosomesVector (numRibosomes);
     Ribosome ribo00; ribo00.pos = 0; ribo00.time = 0;
@@ -136,8 +136,9 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
     cudaMalloc ( &deviceStates, numRibosomes * sizeof(curandState) );
     setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );    
     
-    const int MaxIter = 100;
-    for (int it = 0; it != MaxIter; ++it)
+    const int MaxIter = 1000 * lengthPadded;
+    int it = 0;
+    for (it = 0; it != MaxIter; ++it)
     {
         // stop condition
         int countNonactive = 0;
@@ -192,6 +193,10 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
             (deviceCodons, deviceRibosomes, lengthPadded, epoch, deviceStates);
 
     }
+
+    cout << "finished in " << it << " iterations" << endl;
+    if (it == MaxIter)
+        cerr << "warning: reached the maximum number of iterations" << endl;
 
     vector<double> probs (length);
     for (int i = 0; i != probs.size(); ++i)

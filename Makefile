@@ -22,7 +22,7 @@ tasep_playground: lattice.o tasep_playground.o utils.o
 
 
 
-cuda: lattice_ribo.o utils.o tasep_playground.o
+ribo: lattice_ribo.o utils.o tasep_playground.o
 	$(COMPILE.c) -o tasep_playground lattice_ribo.o utils.o tasep_playground.o $(LDFLAGS) -lcudart -L $(CUDA_HOME)/lib64 
 
 lattice_ribo.o: lattice_ribo.cu lattice.hpp

@@ -118,8 +118,9 @@ std::vector<double> runSinglePolysome (const std::vector<double>& rates,
 
     double t = 0;
 
-    const int MaxIter = 1000 * codons.size();
-    for (int it = 0; it != MaxIter; ++it)
+    const int MaxIter = 10000 * codons.size();
+    int it = 0;
+    for (it = 0; it != MaxIter; ++it)
     {
         // stop condition
         if (t >= epoch) break;
@@ -139,6 +140,10 @@ std::vector<double> runSinglePolysome (const std::vector<double>& rates,
 
         step (codons, ribosomes, t, epoch);
     }
+
+    cout << "finished in " << it << " iterations" << endl;
+    if (it == MaxIter)
+        cerr << "warning: reached the maximum number of iterations" << endl;
 
     // final result
     vector<double> probs (length);
