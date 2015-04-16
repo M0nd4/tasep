@@ -30,15 +30,19 @@ double sampleTime (double rate, curandState* globalState)
 }
 
 
-//__host__ __device__ inline static
-__global__ static 
+__device__ static
+//__global__ static 
 void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoch, curandState* globalState)
 {
+    // TODO: ribosomes AoS to SoA
+
     // copy ribosom data from global memory to registers
     int riboId = threadIdx.x;
     int nextId = (riboId + blockDim.x - 1) % blockDim.x;
     Ribosome ribo     = ribosomes[riboId];
     Ribosome nextribo = ribosomes[nextId];
+
+    // TODO: many ribosomes will be in pos == 0. Check early
 
     // copy codon data from global memory to registers
     int pos = ribo.pos;
@@ -85,12 +89,75 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     }
 }
 
-/*
-__global__ static 
-void computePolysome (double* rates, bool* cover, int length, int padding)
+
+__device__ static
+bool stopCondition (Ribosome* ribosomes, double epoch)
 {
+    // TODO: rewrite with reduce
+        int countNonactive = 0;
+        for (int i = 0; i != blockDim.x; ++i)
+        {
+            Ribosome ribo = ribosomes[i];
+            if (ribo.time >= epoch || ribo.pos == 0)
+                ++countNonactive;
+        }
+        int countActive = blockDim.x - countNonactive;
+        return (countActive == 0);
 }
-*/
+
+
+__global__ static 
+void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthPtr, 
+                      double epoch, curandState* globalState)
+{
+    __shared__ bool flag_terminate;
+   
+    // each block has its own arrays (numRibosomes is the same in every block)
+    Codon*    codons = codonsPtr[blockIdx.x];
+    Ribosome* ribosomes = ribosomesPtr[blockIdx.x];
+    int       length = lengthPtr[blockIdx.x];
+
+    const int MaxIter = 1000 * length;
+    for (int it = 0; it != MaxIter; ++it)
+    {
+        //if (threadIdx.x == 0)
+        //    flag_terminate = it > 2;// stopCondition(ribosomes, epoch);
+        //__syncthreads();
+        //if (flag_terminate) break;
+
+        return;
+
+        /*
+        if (verbose)
+        {
+        cout << setw(2) <<  it << "  &  " << countActive << "  &   " << flush;
+        for (int i = 0; i != lengthPadded; ++i)
+        {
+            Codon codon = codonsVector[i];
+            cout << (codon.occupied ? '*' : '.');
+        }
+        cout << "  &  ";
+        for (int i = padding; i != lengthPadded; ++i)
+        {
+            Codon codon = codonsVector[i];
+            cout << setprecision(2) << setw(2) << codon.accumtime << " ";
+        }
+        cout << " \\\\" << endl;
+        }
+        */
+
+        updatePolysome (codons, ribosomes, length, epoch, globalState);
+    }
+
+    /*
+    cout << "finished in " << it << " iterations" << endl;
+    if (it == MaxIter)
+        cerr << "warning: reached the maximum number of iterations" << endl;
+    */
+
+
+}
+
 
 using namespace std;
 
@@ -134,76 +201,26 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
     // set up seeds
     curandState* deviceStates;
     cudaMalloc ( &deviceStates, numRibosomes * sizeof(curandState) );
-    setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );    
-    
-    const int MaxIter = 1000 * lengthPadded;
-    int it = 0;
-    for (it = 0; it != MaxIter; ++it)
-    {
-        // stop condition
-        int countNonactive = 0;
-        for (int i = 0; i != numRibosomes; ++i)
-        {
-            Ribosome ribo = ribosomesVector[i];
-            if (ribo.time >= epoch || ribo.pos == 0)
-                ++countNonactive;
-        }
-        int countActive = ribosomesVector.size() - countNonactive;
-        if (countActive == 0) break;
+    setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );
 
-        if (verbose)
-        {
-        cout << setw(2) <<  it << "  &  " << countActive << "  &   " << flush;
-        for (int i = 0; i != lengthPadded; ++i)
-        {
-            Codon codon = codonsVector[i];
-            cout << (codon.occupied ? '*' : '.');
-        }
-        cout << "  &  ";
-        /*
-        {
-            Codon codon = codonsVector[i];
-            cout << setprecision(3) << codon.time << " ";
-        }
-        cout << "    ";
-        *//*
-        for (int i = 0; i != numRibosomes; ++i)
-        {
-            Ribosome ribosome = ribosomesVector[i];
-            cout << ribosome.pos << " ";
-        }
-        cout << "    ";
-        *//*
-        for (int i = 0; i != numRibosomes; ++i)
-        {
-            Ribosome ribosome = ribosomesVector[i];
-            cout << setprecision(3) << ribosome.time << " ";
-        }
-        */
-        for (int i = padding; i != lengthPadded; ++i)
-        {
-            Codon codon = codonsVector[i];
-            cout << setprecision(2) << setw(2) << codon.accumtime << " ";
-        }
-        cout << " \\\\" << endl;
-        }
+    // store (in a single case, a single one) pointers to codons and ribosomes by block.
+    // just need to have a pair of pointer in global memory
+    thrust::device_ptr< Codon* >    codonsPtr (&deviceCodons);
+    thrust::device_ptr< Ribosome* > ribosomesPtr (&deviceRibosomes);
+    thrust::device_ptr< int >       lengthPtr (&lengthPadded);
 
-        updatePolysome 
-            <<< 1, numRibosomes, 0 >>> 
-            (deviceCodons, deviceRibosomes, lengthPadded, epoch, deviceStates);
-
-    }
-
-    cout << "finished in " << it << " iterations" << endl;
-    if (it == MaxIter)
-        cerr << "warning: reached the maximum number of iterations" << endl;
+    computePolysome <<< 1, numRibosomes >>> (thrust::raw_pointer_cast( codonsPtr ), 
+                                             thrust::raw_pointer_cast( ribosomesPtr ), 
+                                             thrust::raw_pointer_cast( lengthPtr ), 
+                                             epoch, deviceStates);
 
     vector<double> probs (length);
-    for (int i = 0; i != probs.size(); ++i)
+    /*for (int i = 0; i != probs.size(); ++i)
     {
         Codon codon = codonsVector[i+padding];
         probs[i] = codon.accumtime / epoch;
     }
+    */
 
     return probs;
 }
