@@ -107,13 +107,13 @@ bool stopCondition (Ribosome* ribosomes, double epoch)
 
 
 __global__ static 
-void computePolysome (Codon* codons, Ribosome* ribosomes, int length, 
+void computePolysome (Codon** codonsPtr, Ribosome* ribosomes, int length, 
                       double epoch, curandState* globalState)
 {
     __shared__ bool flag_terminate;
    
     // each block has its own arrays (numRibosomes is the same in every block)
-    //Codon*    codons = codonsPtr[blockIdx.x];
+    Codon*    codons = codonsPtr[0];
     //Ribosome* ribosomes = ribosomesPtr[blockIdx.x];
     //int       length = lengthPtr[blockIdx.x];
 
@@ -207,10 +207,16 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
 //    thrust::device_ptr< Ribosome* > ribosomesPtr (&deviceRibosomes);
 //    thrust::device_ptr< int >       lengthPtr (&lengthPadded);
 
-    computePolysome <<< 1, numRibosomes >>> (deviceCodons, 
+    Codon** codonsPtr;
+    cudaMalloc(&codonsPtr, sizeof(Codon*));
+    cudaMemcpy(codonsPtr, deviceCodons, sizeof(Codon*), cudaMemcpyHostToDevice);
+   
+    computePolysome <<< 1, numRibosomes >>> (codonsPtr, // deviceCodons, 
                                              deviceRibosomes, 
                                              length, 
                                              epoch, deviceStates);
+
+    cudaFree(codonsPtr);
 
     vector<double> probs (length);
     /*for (int i = 0; i != probs.size(); ++i)
