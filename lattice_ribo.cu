@@ -107,25 +107,23 @@ bool stopCondition (Ribosome* ribosomes, double epoch)
 
 
 __global__ static 
-void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthPtr, 
+void computePolysome (Codon* codons, Ribosome* ribosomes, int length, 
                       double epoch, curandState* globalState)
 {
     __shared__ bool flag_terminate;
    
     // each block has its own arrays (numRibosomes is the same in every block)
-    Codon*    codons = codonsPtr[blockIdx.x];
-    Ribosome* ribosomes = ribosomesPtr[blockIdx.x];
-    int       length = lengthPtr[blockIdx.x];
+    //Codon*    codons = codonsPtr[blockIdx.x];
+    //Ribosome* ribosomes = ribosomesPtr[blockIdx.x];
+    //int       length = lengthPtr[blockIdx.x];
 
     const int MaxIter = 1000 * length;
     for (int it = 0; it != MaxIter; ++it)
     {
-        //if (threadIdx.x == 0)
-        //    flag_terminate = it > 2;// stopCondition(ribosomes, epoch);
-        //__syncthreads();
-        //if (flag_terminate) break;
-
-        return;
+        if (threadIdx.x == 0)
+            flag_terminate = stopCondition(ribosomes, epoch);
+        __syncthreads();
+        if (flag_terminate) break;
 
         /*
         if (verbose)
@@ -205,13 +203,13 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
 
     // store (in a single case, a single one) pointers to codons and ribosomes by block.
     // just need to have a pair of pointer in global memory
-    thrust::device_ptr< Codon* >    codonsPtr (&deviceCodons);
-    thrust::device_ptr< Ribosome* > ribosomesPtr (&deviceRibosomes);
-    thrust::device_ptr< int >       lengthPtr (&lengthPadded);
+//    thrust::device_ptr< Codon* >    codonsPtr (&deviceCodons);
+//    thrust::device_ptr< Ribosome* > ribosomesPtr (&deviceRibosomes);
+//    thrust::device_ptr< int >       lengthPtr (&lengthPadded);
 
-    computePolysome <<< 1, numRibosomes >>> (thrust::raw_pointer_cast( codonsPtr ), 
-                                             thrust::raw_pointer_cast( ribosomesPtr ), 
-                                             thrust::raw_pointer_cast( lengthPtr ), 
+    computePolysome <<< 1, numRibosomes >>> (deviceCodons, 
+                                             deviceRibosomes, 
+                                             length, 
                                              epoch, deviceStates);
 
     vector<double> probs (length);
