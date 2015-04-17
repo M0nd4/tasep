@@ -38,6 +38,14 @@ lattice_single.o: lattice_single.cpp lattice.hpp
 
 
 
+approx_cpu: lattice_approx.o utils.o tasep_playground.o
+	$(COMPILE.c) -o tasep_playground lattice_approx.o utils.o tasep_playground.o $(LDFLAGS)
+
+lattice_approx.o: lattice_approx.cpp lattice.hpp
+	$(COMPILE.c) -c -o lattice_approx.o lattice_approx.cpp
+
+
+
 tasep_playground.o: tasep_playground.cpp
 	$(COMPILE.c) -c -o tasep_playground.o tasep_playground.cpp
 

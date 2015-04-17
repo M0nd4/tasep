@@ -20,13 +20,14 @@ vector<double> loadRates (const string& ratesPath)
     istringstream iss;
     string s;
     double d;
+    ifs >> s;
     while (ifs)
     {
-        ifs >> s;
         iss.str(s);
         iss >> d;
         rates.push_back(d);
         iss.clear();
+        ifs >> s;
     }
     ifs.close();
     return rates;
