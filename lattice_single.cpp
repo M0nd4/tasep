@@ -11,7 +11,7 @@
 using namespace std;
 
 
-mt19937_64 _rg (mt19937_64::default_seed);
+mt19937_64 _rg (std::random_device{}());
 uniform_real_distribution<double> _rand (uniform_real_distribution<double>(0,1));
 
 

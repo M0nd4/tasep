@@ -11,7 +11,7 @@
 using namespace std;
 
 
-mt19937_64 _rg (mt19937_64::default_seed);
+mt19937_64 _rg (std::random_device{}());
 uniform_real_distribution<double> _rand (uniform_real_distribution<double>(0,1));
 
 
@@ -63,7 +63,7 @@ tuple<int, double> dynamicMonteCarlo (const vector<Codon>& codons, const deque<R
 void step (vector< vector<Codon> >& codons_parts, 
            vector< deque<Ribosome> >& ribosomes_parts, 
            vector< double >& t_parts, 
-           int verbose = 0)
+           double epoch, bool approximate, int verbose = 0)
 {
     int parts = t_parts.size();
     assert (parts == ribosomes_parts.size());
@@ -89,6 +89,14 @@ void step (vector< vector<Codon> >& codons_parts,
             continue;
         }
 
+        // skip iteration if reached the epoch
+        if (not approximate and t_parts[part] >= epoch)
+            continue;
+
+        // skip iteration in exact scheme if times are not in sequential order
+        if (not approximate and part > 0 and part < parts-1 and t_parts[part] > t_parts[part+1])
+            continue;
+
         // the last virtual codon must be empty
         assert (ribosomes.back().pos != codons.size() - 1);
         // ribosomes must be in sequential order
@@ -100,18 +108,26 @@ void step (vector< vector<Codon> >& codons_parts,
         double dt;
         tie(ribo_id, dt) = dynamicMonteCarlo (codons, ribosomes);
 
-        // all ribosomes are stalled
+        // skip iteration and adjust time if all ribosomes are stalled
         if (ribo_id == -1)
+        {
+            assert (part < parts-1);
+            t_parts[part] = t_parts[part+1];
             continue;
+        }
 
         // reset after the (1) goal of the last virtual codon
         codons.back().occupied = false;
+
+        // correct the time
+        dt = min(dt, epoch - t_parts[part]);
 
         // increase cumulative occupied time for each occupied codon
         for (const Ribosome& ribo : ribosomes)
             codons[ribo.pos].accumtime += dt;
         
         t_parts[part] += dt;
+        //cout << "t: " << t_parts[i] << " ";
 
         // perform jump
         assert (ribosomes[ribo_id].pos != codons.size()-1);
@@ -137,17 +153,21 @@ void step (vector< vector<Codon> >& codons_parts,
 
                 codons.back().occupied = false;
             }
-            // to first codon of the following part
+            // to the first codon of the following part
             else
             {
-                Ribosome ribo = (Ribosome) { .time = t_parts[part+1], .pos = 0 };
-                ribosomes_parts[part+1].push_front(ribo);
+                ribosomes_parts[part+1].push_front( (Ribosome) { .pos = 0 } );
 
                 assert (not ribosomes.empty());
                 ribosomes.pop_back();
 
                 codons.back().occupied = false;
                 codons_parts[part+1].front().occupied = true;
+
+                // this hack uses codons.back().accumtime as temp storage of dt
+                double adj_dt = codons.back().accumtime + t_parts[part + 1] - t_parts[part];
+                codons_parts[part+1].front().accumtime += adj_dt;
+                codons.back().accumtime = 0;
             }
         }
     }
@@ -155,16 +175,20 @@ void step (vector< vector<Codon> >& codons_parts,
     // add new ribosome if necessary
     assert (not ribosomes_parts[0].empty());
     if (ribosomes_parts[0].front().pos != 0)
-        ribosomes_parts[0].emplace_front( (Ribosome) { .time = t_parts[0], .pos = 0 } );
+        ribosomes_parts[0].emplace_front( (Ribosome) { .pos = 0 } );
 }
 
 
 std::vector<double> runSinglePolysome (const std::vector<double>& rates, double initRate, 
                                        double epoch, int verbose)
 {
+    /* initialize random seed: */
+    srand (time(NULL));
+
     cout << "size: " << rates.size() << endl;
 
     const int numparts = 32;   // TODO: move to arguments (requires changes all files)
+    const bool approximate = false;
 
     // split codons into parts
     vector< vector<Codon> >    codons_parts (numparts);
@@ -186,10 +210,10 @@ std::vector<double> runSinglePolysome (const std::vector<double>& rates, double 
         for (int j = 0; j != pos2 - pos1; ++j)
             codons[j + padfront].rate = rates[pos1+j];
 
+        codons_parts[i] = codons;
+
         if (verbose)
             cout << "part " << i <<  ", length: " << length << endl;
-
-        codons_parts[i] = codons;
     }
 
     // init the very first codon
@@ -208,7 +232,7 @@ std::vector<double> runSinglePolysome (const std::vector<double>& rates, double 
                 cout << codons_parts[i][j].rate << (j == codons_parts[i].size() - 1 ? "\n" : " ");
     }
 
-    const int MaxIter = 1000 * rates.size();
+    const int MaxIter = 100 * epoch * rates.size();
     for (int it = 0; it != MaxIter; ++it)
     {
         // stop condition
@@ -217,7 +241,7 @@ std::vector<double> runSinglePolysome (const std::vector<double>& rates, double 
 
         if (verbose)
         {
-            cout << setw(3) << it << "   &   " << flush;
+            cout << setw(3) << it << "  &  " << flush;
             // occupied
             for (int i = 0; i != numparts; ++i)
                 for (int j = (i == 0 ? 1 : 0); j != codons_parts[i].size() - 1; ++j)
@@ -229,7 +253,7 @@ std::vector<double> runSinglePolysome (const std::vector<double>& rates, double 
             cout << " \\\\" << endl;
         }
 
-        step (codons_parts, ribosomes_parts, t_parts, verbose);
+        step (codons_parts, ribosomes_parts, t_parts, epoch, approximate, verbose);
     }
 
     // final result
