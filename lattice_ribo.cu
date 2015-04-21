@@ -107,15 +107,15 @@ bool stopCondition (Ribosome* ribosomes, double epoch)
 
 
 __global__ static 
-void computePolysome (Codon** codonsPtr, Ribosome* ribosomes, int length, 
+void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengths, 
                       double epoch, curandState* globalState)
 {
     __shared__ bool flag_terminate;
    
     // each block has its own arrays (numRibosomes is the same in every block)
-    Codon*    codons = codonsPtr[0];
-    //Ribosome* ribosomes = ribosomesPtr[blockIdx.x];
-    //int       length = lengthPtr[blockIdx.x];
+    Codon*    codons = codonsPtr[blockIdx.x];
+    Ribosome* ribosomes = ribosomesPtr[blockIdx.x];
+    int       length = lengths[blockIdx.x];
 
     const int MaxIter = 1000 * length;
     for (int it = 0; it != MaxIter; ++it)
@@ -201,22 +201,15 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
     cudaMalloc ( &deviceStates, numRibosomes * sizeof(curandState) );
     setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );
 
-    // store (in a single case, a single one) pointers to codons and ribosomes by block.
-    // just need to have a pair of pointer in global memory
-//    thrust::device_ptr< Codon* >    codonsPtr (&deviceCodons);
-//    thrust::device_ptr< Ribosome* > ribosomesPtr (&deviceRibosomes);
-//    thrust::device_ptr< int >       lengthPtr (&lengthPadded);
+    // it's easy to copy to vector, so let's have vectors of length 1
+    thrust::device_vector<Codon*> codonsPtr       (1, deviceCodons);
+    thrust::device_vector<Ribosome*> ribosomesPtr (1, deviceRibosomes);
+    thrust::device_vector<int> lengthPtr          (1, lengthPadded);
 
-    Codon** codonsPtr;
-    cudaMalloc(&codonsPtr, sizeof(Codon*));
-    cudaMemcpy(codonsPtr, deviceCodons, sizeof(Codon*), cudaMemcpyHostToDevice);
-   
-    computePolysome <<< 1, numRibosomes >>> (codonsPtr, // deviceCodons, 
-                                             deviceRibosomes, 
-                                             length, 
+    computePolysome <<< 1, numRibosomes >>> (thrust::raw_pointer_cast( &codonsPtr[0] ), 
+                                             thrust::raw_pointer_cast( &ribosomesPtr[0] ), 
+                                             thrust::raw_pointer_cast( &lengthPtr[0] ), 
                                              epoch, deviceStates);
-
-    cudaFree(codonsPtr);
 
     vector<double> probs (length);
     /*for (int i = 0; i != probs.size(); ++i)
