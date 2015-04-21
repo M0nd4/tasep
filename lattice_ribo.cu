@@ -170,29 +170,25 @@ void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthsPt
 using namespace std;
 
 
-vector<double> runSinglePolysome (const vector<double>& rates, double initRate, double epoch, int verbose)
+vector<double> runSinglePolysome (const vector<double>& rates, double epoch, int verbose)
 {
     int padding = 1;
 
     // pad the vector
-    int length = rates.size();
-    int lengthPadded = length + padding;
+    int lengthPadded = rates.size();
+    int length = rates.size() - 1;  // first element is initRate
 
     cout << "length: " << length << endl;
     cout << "padding: " << padding << endl;
 
     // init codons
     thrust::device_vector<Codon> codonsVector (lengthPadded);
-    for (int i = 0; i != length; ++i)
+    for (int i = 0; i != lengthPadded; ++i)
     {
         Codon codon; codon.rate = rates[i]; codon.time = 0; codon.occupied = false; codon.accumtime = 0;
-        codonsVector[i+padding] = codon;
+        codonsVector[i] = codon;
     }
-    Codon codon0; codon0.rate = initRate; codon0.time = 0; codon0.occupied = false; codon0.accumtime = 0;
-    codonsVector.front() = codon0;
-    Codon codon1 = codonsVector[1];
-    codon1.occupied = true;
-    codonsVector[1] = codon1;
+    Codon codon1 = codonsVector[1]; codon1.occupied = true; codonsVector[1] = codon1;
     Codon* deviceCodons = thrust::raw_pointer_cast( &codonsVector[0] );
 
     // init ribosomes
@@ -282,4 +278,5 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
 
     return vectorProb;
 }
+
 

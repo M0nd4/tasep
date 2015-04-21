@@ -94,23 +94,21 @@ void run (vector<Codon>& codons, deque<Ribosome>& ribosomes, double epoch, int v
 }
 
 
-std::vector<double> runSinglePolysome (const std::vector<double>& rates, 
-                                       double initRate, double epoch, int verbose)
+std::vector<double> runSinglePolysome (const vector<double>& rates, double epoch, int verbose)
 {
     int padding = 1;
 
     // pad the vector
-    int length = rates.size();
-    int lengthPadded = length + padding;
+    int lengthPadded = rates.size();
+    int length = rates.size() - 1;
 
     cout << "length: " << length << endl;
     cout << "padding: " << padding << endl;
 
     // init codons
     vector<Codon> codons (lengthPadded);
-    for (int i = 0; i != length; ++i)
-        codons[i+padding] = { .time = 0, .rate = rates[i], .occupied = false, .accumtime = 0 };
-    codons.front() = { .time = 0, .rate = initRate, .occupied = true, .accumtime = 0 };
+    for (int i = 0; i != lengthPadded; ++i)
+        codons[i] = { .time = 0, .rate = rates[i], .occupied = false, .accumtime = 0 };
 
     // init ribosomes
     deque<Ribosome> ribosomes;
@@ -125,7 +123,7 @@ std::vector<double> runSinglePolysome (const std::vector<double>& rates,
         // stop condition
         if (t >= epoch) break;
 
-        if (verbose)
+        if (verbose >= 2)
         {
             cout << setw(2) <<  it << "   &   " << ribosomes.size()-1 << "   &    " << flush;
             // occupied

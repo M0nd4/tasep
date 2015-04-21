@@ -17,6 +17,5 @@ struct Codon {
 
 
 // return probability
-std::vector<double> runSinglePolysome (const std::vector<double>& rates, 
-                                       double initRate, double epoch, int verbose = 0);
+std::vector<double> runSinglePolysome (const std::vector<double>& rates, double epoch, int verbose = 0);
 
