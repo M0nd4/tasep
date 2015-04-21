@@ -52,16 +52,17 @@ int main(int argc, char **argv)
     double epoch     = cmdEpoch.getValue();
     int    verbose   = cmdVerbose.getValue();
 
-    vector<double> rate_vec = loadRates (ratesPath);
+    vector<double> rates = loadRates (ratesPath);
     if (verbose >= 2)
     {
         cout << "rates: ";
-        for (int i = 0; i != rate_vec.size(); ++i)
-            cout << setprecision(3) << rate_vec[i] << " ";
+        for (int i = 0; i != rates.size(); ++i)
+            cout << setprecision(3) << rates[i] << " ";
         cout << endl;
     }
 
-    vector<double> probs = runSinglePolysome (rate_vec, epoch, verbose);
+    vector<double> probs;
+    runSinglePolysome (rates, epoch, probs, verbose);
 
     // write results
     ofstream ofs (outPath.c_str());

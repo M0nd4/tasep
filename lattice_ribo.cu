@@ -170,7 +170,8 @@ void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthsPt
 using namespace std;
 
 
-vector<double> runSinglePolysome (const vector<double>& rates, double epoch, int verbose)
+void runSinglePolysome (const vector<double>& rates, double epoch, 
+                        vector<double>& probs, int verbose)
 {
     int padding = 1;
 
@@ -271,12 +272,11 @@ vector<double> runSinglePolysome (const vector<double>& rates, double epoch, int
         cudaFree (deviceOccupancy);
         cudaFree (deviceActiveRibos);
     }
-        
-    vector<double> vectorProb (length);
-    cudaMemcpy (&vectorProb[0], deviceProb, length*sizeof(double), cudaMemcpyDeviceToHost);
+     
+    // write result
+    probs.resize(length);
+    cudaMemcpy (&probs[0], deviceProb, length*sizeof(double), cudaMemcpyDeviceToHost);
     cudaFree (deviceProb);
-
-    return vectorProb;
 }
 
 

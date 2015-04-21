@@ -94,7 +94,8 @@ void run (vector<Codon>& codons, deque<Ribosome>& ribosomes, double epoch, int v
 }
 
 
-std::vector<double> runSinglePolysome (const vector<double>& rates, double epoch, int verbose)
+void runSinglePolysome (const vector<double>& rates, double epoch, 
+                        vector<double>& probs, int verbose)
 {
     int padding = 1;
 
@@ -143,10 +144,8 @@ std::vector<double> runSinglePolysome (const vector<double>& rates, double epoch
     if (it == MaxIter)
         cerr << "warning: reached the maximum number of iterations" << endl;
 
-    // final result
-    vector<double> probs (length);
+    // write result
+    probs.resize (length);
     for (int i = 0; i != probs.size(); ++i)
         probs[i] = codons[i].accumtime / epoch;
-
-    return probs;
 }
