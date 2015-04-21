@@ -49,6 +49,8 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     int nextpos = (pos + length + 1) % length;
     Codon codon = codons[pos];
     Codon nextcodon = codons[nextpos];
+
+    // after copy
     __syncthreads();
 
     // update current time with time of the next codon
@@ -91,18 +93,17 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
 
 
 __device__ static
-bool stopCondition (Ribosome* ribosomes, double epoch)
+int countActiveRibos (Ribosome* ribosomes, double epoch)
 {
     // TODO: rewrite with reduce
-        int countNonactive = 0;
-        for (int i = 0; i != blockDim.x; ++i)
-        {
-            Ribosome ribo = ribosomes[i];
-            if (ribo.time >= epoch || ribo.pos == 0)
-                ++countNonactive;
-        }
-        int countActive = blockDim.x - countNonactive;
-        return (countActive == 0);
+    int countNonactive = 0;
+    for (int i = 0; i != blockDim.x; ++i)
+    {
+        Ribosome ribo = ribosomes[i];
+        if (ribo.time >= epoch || ribo.pos == 0)
+            ++countNonactive;
+    }
+    return blockDim.x - countNonactive;
 }
 
 
@@ -111,11 +112,14 @@ struct In {
     int maxIter;
     double epoch;
     int frontpadding;
+    int iters4display;
 };
 
 struct Out {
     int iter;
     double* prob;
+    char* occupancy;
+    int* activeRibos;
 };
 
 
@@ -123,41 +127,31 @@ __global__ static
 void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthsPtr, 
                       In* inPtr, Out* outPtr, curandState* globalState)
 {
-    __shared__ bool flag_terminate;
+    __shared__ int activeRibos;
    
     // each block has its own arrays (numRibosomes is the same in every block)
     Codon*    codons = codonsPtr[blockIdx.x];
     Ribosome* ribosomes = ribosomesPtr[blockIdx.x];
     int       length = lengthsPtr[blockIdx.x];
     In        in = inPtr[blockIdx.x];
-
-    Out out = outPtr[blockIdx.x];
+    Out       out = outPtr[blockIdx.x];
 
     for (out.iter = 0; out.iter != in.maxIter; ++out.iter)
     {
+        // stop condition
         if (threadIdx.x == 0)
-            flag_terminate = stopCondition(ribosomes, in.epoch);
+            activeRibos = countActiveRibos (ribosomes, in.epoch);
         __syncthreads();
-        if (flag_terminate) break;
+        if (activeRibos == 0) break;
 
-        /*
-        if (verbose)
+        // write occupancy into specially pre-allocated memory 
+        if (out.iter < in.iters4display)
         {
-        cout << setw(2) <<  it << "  &  " << countActive << "  &   " << flush;
-        for (int i = 0; i != lengthPadded; ++i)
-        {
-            Codon codon = codonsVector[i];
-            cout << (codon.occupied ? '*' : '.');
+            if (threadIdx.x == 0) out.activeRibos[out.iter] = activeRibos;
+            for (int i = threadIdx.x; i < length; i += blockDim.x)
+                out.occupancy[out.iter * length + i] = codons[i].occupied;
+            __syncthreads();
         }
-        cout << "  &  ";
-        for (int i = padding; i != lengthPadded; ++i)
-        {
-            Codon codon = codonsVector[i];
-            cout << setprecision(2) << setw(2) << codon.accumtime << " ";
-        }
-        cout << " \\\\" << endl;
-        }
-        */
 
         updatePolysome (codons, ribosomes, length, in.epoch, globalState);
     }
@@ -223,12 +217,30 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
 
     // info to give
     In in; in.epoch = epoch; in.maxIter = 1000 * lengthPadded; in.frontpadding = 1;
-    thrust::device_vector<In> inPtr               (1, in);
 
     // info to return
     double* deviceProb;
     cudaMalloc (&deviceProb, lengthPadded*sizeof(double));
     Out out; out.prob = deviceProb;
+
+    // debugging/visualization info to return
+    int iters4display = verbose >= 2 ? 200 : 0;
+    int space4occupancy = iters4display*lengthPadded*sizeof(char);
+    char* deviceOccupancy;
+    int* deviceActiveRibos;
+    if (iters4display) 
+    {
+        cudaMalloc (&deviceOccupancy, space4occupancy);
+        cudaMemset (deviceOccupancy, 0, space4occupancy);
+        cudaMalloc (&deviceActiveRibos, iters4display*sizeof(int));
+        cudaMemset (deviceActiveRibos, 0, iters4display*sizeof(int));
+    }
+    in.iters4display = iters4display;
+    out.occupancy = deviceOccupancy;
+    out.activeRibos = deviceActiveRibos;
+                            
+    // copy the in/out structs to device
+    thrust::device_vector<In> inPtr               (1, in);
     thrust::device_vector<Out> outPtr             (1, out);
 
     if (verbose)
@@ -246,6 +258,24 @@ vector<double> runSinglePolysome (const vector<double>& rates, double initRate, 
     if (out.iter == in.maxIter)
         cerr << "warning: reached the maximum number of iterations" << endl;
 
+    // debugging/visualization info
+    if (iters4display)
+    {
+        vector<char> vectorOccupancy (iters4display*lengthPadded);
+        cudaMemcpy (&vectorOccupancy[0], deviceOccupancy, space4occupancy, cudaMemcpyDeviceToHost);
+        vector<int> vectorActiveRibos (iters4display);
+        cudaMemcpy (&vectorActiveRibos[0], deviceActiveRibos, iters4display*sizeof(int), cudaMemcpyDeviceToHost);
+        for (int iter = 0; iter != min(iters4display, out.iter); ++iter)
+        {
+            cout << setw(3) << iter << "  &  " << setw(3) << vectorActiveRibos[iter] << "  &  ";
+            for (int i = 0; i != lengthPadded; ++i)
+                cout << (vectorOccupancy[iter * lengthPadded + i] ? '*' : '.');
+            cout << endl;
+        }
+        cudaFree (deviceOccupancy);
+        cudaFree (deviceActiveRibos);
+    }
+        
     vector<double> vectorProb (length);
     cudaMemcpy (&vectorProb[0], deviceProb, length*sizeof(double), cudaMemcpyDeviceToHost);
     cudaFree (deviceProb);
