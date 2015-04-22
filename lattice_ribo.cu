@@ -173,19 +173,9 @@ void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthsPt
 using namespace std;
 
 
-void runSinglePolysome (const vector<double>& rates, double epoch, 
-                        vector<double>& probs, int verbose)
+Codon* initCodons (const vector<double>& rates)
 {
-    int padding = 1;
-
-    // pad the vector
     int lengthPadded = rates.size();
-    int length = rates.size() - 1;  // first element is initRate
-
-    cout << "length: " << length << endl;
-    cout << "padding: " << padding << endl;
-
-    // init codons
     vector<Codon> hostCodons (lengthPadded);
     for (int i = 0; i != lengthPadded; ++i)
     {
@@ -195,9 +185,11 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     Codon* deviceCodons;
     cudaMalloc(&deviceCodons, lengthPadded*sizeof(Codon));
     cudaMemcpy(deviceCodons, &hostCodons[0], lengthPadded*sizeof(Codon), cudaMemcpyHostToDevice);
+    return deviceCodons;
+}
 
-    // init ribosomes
-    const int numRibosomes = ((lengthPadded - 1) / 32 + 1) * 32;
+Ribosome* initRibosomes (int numRibosomes)
+{
     vector<Ribosome> hostRibosomes (numRibosomes);
     Ribosome ribo00; ribo00.pos = 0; ribo00.time = 0;
     Ribosome ribo10; ribo10.pos = 1; ribo10.time = 0;
@@ -206,27 +198,11 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     Ribosome* deviceRibosomes;
     cudaMalloc(&deviceRibosomes, numRibosomes*sizeof(Ribosome));
     cudaMemcpy(deviceRibosomes, &hostRibosomes[0], numRibosomes*sizeof(Ribosome), cudaMemcpyHostToDevice);
+    return deviceRibosomes;
+}
 
-    // set up seeds
-    curandState* deviceStates;
-    cudaMalloc ( &deviceStates, numRibosomes * sizeof(curandState) );
-    setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );
-
-    // it's easy to copy to vector, so let's have vectors of length 1
-    thrust::device_vector<Codon*> codonsPtr       (1, deviceCodons);
-    thrust::device_vector<Ribosome*> ribosomesPtr (1, deviceRibosomes);
-    thrust::device_vector<int> lengthPtr          (1, lengthPadded);
-
-    // info to give
-    In in; in.epoch = epoch; in.maxIterMult = 1000; in.frontpadding = 1;
-
-    // info to return
-    double* deviceProb;
-    cudaMalloc (&deviceProb, lengthPadded*sizeof(double));
-    Out out; out.prob = deviceProb;
-
-    // debugging/visualization info to return
-    int iters4display = verbose >= 2 ? 200 : 0;
+void initDebug (In& in, Out& out, int lengthPadded, int iters4display)
+{
     int space4occupancy = iters4display*lengthPadded*sizeof(char);
     char* deviceOccupancy;
     int* deviceActiveRibos;
@@ -239,14 +215,74 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     }
     in.iters4display = iters4display;
     out.occupancy = deviceOccupancy;
-    out.activeRibos = deviceActiveRibos;
-                            
+    out.activeRibos = deviceActiveRibos;                        
+}
+
+void printDebug (const In& in, const Out& out, int lengthPadded)
+{
+    if (in.iters4display)
+    {
+        int space4occupancy = in.iters4display*lengthPadded*sizeof(char);
+        vector<char> vectorOccupancy (in.iters4display*lengthPadded);
+        cudaMemcpy (&vectorOccupancy[0], out.occupancy, space4occupancy, cudaMemcpyDeviceToHost);
+        vector<int> vectorActiveRibos (in.iters4display);
+        cudaMemcpy (&vectorActiveRibos[0], out.activeRibos, in.iters4display*sizeof(int), cudaMemcpyDeviceToHost);
+        for (int iter = 0; iter != min(in.iters4display, out.iter); ++iter)
+        {
+            cout << setw(3) << iter << "  &  " << setw(3) << vectorActiveRibos[iter] << "  &  ";
+            for (int i = 0; i != lengthPadded; ++i)
+                cout << (vectorOccupancy[iter * lengthPadded + i] ? '*' : '.');
+            cout << endl;
+        }
+        cudaFree (out.occupancy);
+        cudaFree (out.activeRibos);
+    }
+}
+
+
+
+void runSinglePolysome (const vector<double>& rates, double epoch, 
+                        vector<double>& probs, int verbose)
+{
+    int padding = 1;
+
+    // pad the vector
+    int lengthPadded = rates.size();
+    int length = rates.size() - 1;  // first element is initRate
+
+    cout << "length: " << length << endl;
+    cout << "padding: " << padding << endl;
+
+    // init
+    const int numRibosomes = ((lengthPadded - 1) / 32 + 1) * 32;
+    Ribosome* deviceRibosomes = initRibosomes(numRibosomes);
+    Codon*    deviceCodons    = initCodons(rates);
+
+    // set up seeds
+    curandState* deviceStates;
+    cudaMalloc ( &deviceStates, numRibosomes * sizeof(curandState) );
+    setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );
+
+    // pass constants
+    In in; in.epoch = epoch; in.maxIterMult = 1000; in.frontpadding = 1;
+
+    // info to return
+    double* deviceProb;
+    cudaMalloc (&deviceProb, lengthPadded*sizeof(double));
+    Out out; out.prob = deviceProb;
+
+    // debugging/visualization info to return
+    int iters4display = verbose >= 2 ? 200 : 0;
+    initDebug (in, out, lengthPadded, iters4display);
+
     // copy the in/out structs to device
+    thrust::device_vector<Codon*> codonsPtr       (1, deviceCodons);
+    thrust::device_vector<Ribosome*> ribosomesPtr (1, deviceRibosomes);
+    thrust::device_vector<int> lengthPtr          (1, lengthPadded);
     thrust::device_vector<In> inPtr               (1, in);
     thrust::device_vector<Out> outPtr             (1, out);
 
-    if (verbose)
-        cout << "in: " << in.epoch << " " << in.maxIterMult << endl;
+    if (verbose) cout << "in: " << in.epoch << " " << in.maxIterMult << endl;
 
     computePolysome <<< 1, numRibosomes >>> (thrust::raw_pointer_cast( &codonsPtr[0] ), 
                                              thrust::raw_pointer_cast( &ribosomesPtr[0] ), 
@@ -261,23 +297,8 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
         cerr << "warning: reached the maximum number of iterations" << endl;
 
     // debugging/visualization info
-    if (iters4display)
-    {
-        vector<char> vectorOccupancy (iters4display*lengthPadded);
-        cudaMemcpy (&vectorOccupancy[0], deviceOccupancy, space4occupancy, cudaMemcpyDeviceToHost);
-        vector<int> vectorActiveRibos (iters4display);
-        cudaMemcpy (&vectorActiveRibos[0], deviceActiveRibos, iters4display*sizeof(int), cudaMemcpyDeviceToHost);
-        for (int iter = 0; iter != min(iters4display, out.iter); ++iter)
-        {
-            cout << setw(3) << iter << "  &  " << setw(3) << vectorActiveRibos[iter] << "  &  ";
-            for (int i = 0; i != lengthPadded; ++i)
-                cout << (vectorOccupancy[iter * lengthPadded + i] ? '*' : '.');
-            cout << endl;
-        }
-        cudaFree (deviceOccupancy);
-        cudaFree (deviceActiveRibos);
-    }
-     
+    printDebug (in, out, lengthPadded);
+
     // write result
     probs.resize(length);
     cudaMemcpy (&probs[0], deviceProb, length*sizeof(double), cudaMemcpyDeviceToHost);
@@ -323,7 +344,6 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     //vector<size_t> indices = orderedLength (rates);
 
     const int MaxIterMult = 1000;
-    const int iters4display = verbose >= 2 ? 200 : 0;
     
     int maxLengthPadded = max_element(rates.begin(), rates.end(), lengthCompare)->size();
     int numRibosomes = ((maxLengthPadded - 1) / 32 + 1) * 32;
@@ -347,30 +367,11 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     {
         int lengthPadded = rates[rna].size();
 
-        // init codons
-        vector<Codon> hostCodons (lengthPadded);
-        for (int i = 0; i != lengthPadded; ++i)
-        {
-            Codon codon; codon.rate = rates[rna][i]; codon.time = 0; codon.occupied = (i == 1); codon.accumtime = 0;
-            hostCodons[i] = codon;
-        }
-        Codon* deviceCodons;
-        cudaMalloc(&deviceCodons, lengthPadded*sizeof(Codon));
-        cudaMemcpy(deviceCodons, &hostCodons[0], lengthPadded*sizeof(Codon), cudaMemcpyHostToDevice);
+        // init
+        Ribosome* deviceRibosomes = initRibosomes(numRibosomes);
+        Codon*    deviceCodons    = initCodons(rates[rna]);
 
-        // init ribosomes
-        const int numRibosomes = ((lengthPadded - 1) / 32 + 1) * 32;
-        vector<Ribosome> hostRibosomes (numRibosomes);  // TODO: always the same - move out of loop 
-        Ribosome ribo00; ribo00.pos = 0; ribo00.time = 0;
-        Ribosome ribo10; ribo10.pos = 1; ribo10.time = 0;
-        for (int i = 0; i != numRibosomes; ++i) hostRibosomes[i] = ribo00;
-        hostRibosomes[0] = ribo10;
-        Ribosome* deviceRibosomes;
-        cudaMalloc(&deviceRibosomes, numRibosomes*sizeof(Ribosome));
-        cudaMemcpy(deviceRibosomes, &hostRibosomes[0], numRibosomes*sizeof(Ribosome), cudaMemcpyHostToDevice);
-
-
-        // info to give
+        // pass constants
         In in; in.epoch = epoch; in.maxIterMult = 1000; in.frontpadding = 1;
 
         // info to return
@@ -379,29 +380,17 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         Out out; out.prob = deviceProb;
 
         // debugging/visualization info to return
-        int space4occupancy = iters4display*lengthPadded*sizeof(char);
-        char* deviceOccupancy;
-        int* deviceActiveRibos;
-        if (iters4display) 
-        {
-            cudaMalloc (&deviceOccupancy, space4occupancy);
-            cudaMemset (deviceOccupancy, 0, space4occupancy);
-            cudaMalloc (&deviceActiveRibos, iters4display*sizeof(int));
-            cudaMemset (deviceActiveRibos, 0, iters4display*sizeof(int));
-        }
-        in.iters4display = iters4display;
-        out.occupancy = deviceOccupancy;
-        out.activeRibos = deviceActiveRibos;
+        int iters4display = verbose >= 2 ? 200 : 0;
+        initDebug (in, out, lengthPadded, iters4display);
 
         // copy the in/out structs to device
-        codonsPtr[rna] = deviceCodons;
+        codonsPtr[rna]    = deviceCodons;
         ribosomesPtr[rna] = deviceRibosomes;
-        lengthPtr[rna] = lengthPadded;
-        inPtr[rna] = in;
-        outPtr[rna] = out;
+        lengthPtr[rna]    = lengthPadded;
+        inPtr[rna]        = in;
+        outPtr[rna]       = out;
 
-        if (verbose > 1)
-            cout << "rna: " << rna << ", length: " << lengthPadded-1 << endl;
+        if (verbose > 1) cout << "rna: " << rna << ", length: " << lengthPadded-1 << endl;
     }
 
     computePolysome <<< numRNAs, numRibosomes >>> (thrust::raw_pointer_cast( &codonsPtr[0] ), 
@@ -421,8 +410,6 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         Out out = outPtr[rna];
         In in = inPtr[rna];
         double* deviceProb = out.prob;
-        char* deviceOccupancy = out.occupancy;
-        int* deviceActiveRibos = out.activeRibos;
 
         if (verbose)
             cout << "rna: " << rna << ", finished in " << out.iter << " iterations" << endl;
@@ -430,24 +417,8 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
             cerr << "warning: reached the maximum number of iterations" << endl;
 
         // debugging/visualization info
-        if (iters4display)
-        {
-            int space4occupancy = iters4display*lengthPadded*sizeof(char);
-            vector<char> vectorOccupancy (iters4display*lengthPadded);
-            cudaMemcpy (&vectorOccupancy[0], deviceOccupancy, space4occupancy, cudaMemcpyDeviceToHost);
-            vector<int> vectorActiveRibos (iters4display);
-            cudaMemcpy (&vectorActiveRibos[0], deviceActiveRibos, iters4display*sizeof(int), cudaMemcpyDeviceToHost);
-            for (int iter = 0; iter != min(iters4display, out.iter); ++iter)
-            {
-                cout << setw(3) << iter << "  &  " << setw(3) << vectorActiveRibos[iter] << "  &  ";
-                for (int i = 0; i != lengthPadded; ++i)
-                    cout << (vectorOccupancy[iter * lengthPadded + i] ? '*' : '.');
-                cout << endl;
-            }
-            cudaFree (deviceOccupancy);
-            cudaFree (deviceActiveRibos);
-        }
-         
+        printDebug (in, out, lengthPadded);
+
         // write result
         probs[rna].resize(length);
         cudaMemcpy (&probs[rna][0], deviceProb, length*sizeof(double), cudaMemcpyDeviceToHost);
