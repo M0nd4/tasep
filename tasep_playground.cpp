@@ -75,7 +75,7 @@ int main(int argc, char **argv)
         cerr << "rates are empty" << endl;
         return 1;
     }
-    if (verbose >= 2)
+    if (verbose > 2)
     {
         cout << "rates: " << endl;
         for (int rna = 0; rna != rates.size(); ++rna)
