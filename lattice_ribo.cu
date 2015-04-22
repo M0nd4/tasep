@@ -284,11 +284,11 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
 
     if (verbose) cout << "in: " << in.epoch << " " << in.maxIterMult << endl;
 
-    computePolysome <<< 1, numRibosomes >>> (thrust::raw_pointer_cast( &codonsPtr[0] ), 
-                                             thrust::raw_pointer_cast( &ribosomesPtr[0] ), 
-                                             thrust::raw_pointer_cast( &lengthPtr[0] ), 
-                                             thrust::raw_pointer_cast( &inPtr[0] ),
-                                             thrust::raw_pointer_cast( &outPtr[0] ),
+    computePolysome <<< 1, numRibosomes >>> (thrust::raw_pointer_cast( codonsPtr.data() ), 
+                                             thrust::raw_pointer_cast( ribosomesPtr.data() ), 
+                                             thrust::raw_pointer_cast( lengthPtr.data() ), 
+                                             thrust::raw_pointer_cast( inPtr.data() ),
+                                             thrust::raw_pointer_cast( outPtr.data() ),
                                              deviceStates);
 
     out = outPtr[0];
@@ -393,11 +393,11 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         if (verbose > 1) cout << "rna: " << rna << ", length: " << lengthPadded-1 << endl;
     }
 
-    computePolysome <<< numRNAs, numRibosomes >>> (thrust::raw_pointer_cast( &codonsPtr[0] ), 
-                                                   thrust::raw_pointer_cast( &ribosomesPtr[0] ), 
-                                                   thrust::raw_pointer_cast( &lengthPtr[0] ), 
-                                                   thrust::raw_pointer_cast( &inPtr[0] ),
-                                                   thrust::raw_pointer_cast( &outPtr[0] ),
+    computePolysome <<< numRNAs, numRibosomes >>> (thrust::raw_pointer_cast( codonsPtr.data() ), 
+                                                   thrust::raw_pointer_cast( ribosomesPtr.data() ), 
+                                                   thrust::raw_pointer_cast( lengthPtr.data() ), 
+                                                   thrust::raw_pointer_cast( inPtr.data() ),
+                                                   thrust::raw_pointer_cast( outPtr.data() ),
                                                    deviceStates);
 
     // process outputs
