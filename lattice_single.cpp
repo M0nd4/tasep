@@ -2,6 +2,8 @@
 #include <iostream>
 #include <random>
 #include <tuple>
+#include <algorithm>
+#include <functional>
 #include <iomanip>
 #include <assert.h>
 
@@ -149,3 +151,88 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     for (int i = 0; i != probs.size(); ++i)
         probs[i] = codons[i].accumtime / epoch;
 }
+
+
+
+// sort indices of input array
+vector<size_t> orderedLength (const vector< vector<double> >& values) {
+    vector<size_t> indices(values.size());
+    iota( begin(indices), end(indices), static_cast<size_t>(0) );
+    sort( begin(indices), end(indices), [&](size_t a, size_t b) 
+            { return values[a].size() < values[b].size(); } );
+    return indices;
+}
+
+
+void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
+                           vector< vector<double> >& probs, int verbose)
+{
+    int numRNAs = rates.size();
+    probs.resize(numRNAs);
+
+    // sort rates vectors based on length
+    vector<size_t> indices = orderedLength (rates);
+
+    //int numsplits = 1;
+    auto maxLengthElement = std::max_element (rates.begin(), rates.end(),
+            [&](const vector<double>& a, const vector<double>& b) { return a.size() < b.size(); } );
+    int maxLengthPadded = maxLengthElement->size();
+
+    if (verbose)
+        cout << "split: " << setw(3) << 0 << ", numRibos: " << maxLengthPadded << endl;
+
+    for (int rna = 0; rna != numRNAs; ++rna)
+    {
+        int lengthPadded = rates[rna].size();
+        int length = lengthPadded - 1;
+        int padding = 1;
+
+        if (verbose >= 1)
+            cout << "rna: " << rna << endl;
+
+        // init codons
+        vector<Codon> codons (lengthPadded);
+        for (int i = 0; i != lengthPadded; ++i)
+            codons[i] = { .time = 0, .rate = rates[rna][i], .occupied = false, .accumtime = 0 };
+
+        // init ribosomes
+        deque<Ribosome> ribosomes;
+        ribosomes.push_front( (Ribosome) { .time = 0, .pos = 0 } );
+
+        double t = 0;
+
+        const int MaxIter = 10000 * codons.size();
+        int it = 0;
+        for (it = 0; it != MaxIter; ++it)
+        {
+            // stop condition
+            if (t >= epoch) break;
+
+            if (verbose >= 2)
+            {
+                cout << setw(2) <<  it << "   &   " << ribosomes.size()-1 << "   &    " << flush;
+                // occupied
+                for (int i = 0; i != lengthPadded; ++i)
+                    cout << (codons[i].occupied ? '*' : '.');
+                cout << "   &   ";
+                // accumtime
+                for (int i = padding; i != lengthPadded; ++i)
+                    cout << setprecision(1) << setw(3) << codons[i].accumtime << " ";
+                cout << " \\\\" << endl;
+            }
+
+            step (codons, ribosomes, t, epoch);
+        }
+
+        if (verbose)
+            cout << "finished in " << it << " iterations" << endl;
+        if (it == MaxIter)
+            cerr << "warning: reached the maximum number of iterations" << endl;
+
+        // write result
+        probs[rna].resize (length);
+        for (int i = 0; i != probs[rna].size(); ++i)
+            probs[rna][i] = codons[i].accumtime / epoch;
+    }
+}
+
