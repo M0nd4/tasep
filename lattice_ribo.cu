@@ -348,28 +348,30 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         int lengthPadded = rates[rna].size();
 
         // init codons
-        // TODO: in a kernel
-        thrust::device_vector<Codon> codonsVector (lengthPadded);
+        vector<Codon> hostCodons (lengthPadded);
         for (int i = 0; i != lengthPadded; ++i)
         {
-            Codon codon; codon.rate = rates[rna][i]; codon.time = 0; codon.occupied = false; codon.accumtime = 0;
-            codonsVector[i] = codon;
+            Codon codon; codon.rate = rates[rna][i]; codon.time = 0; codon.occupied = (i == 1); codon.accumtime = 0;
+            hostCodons[i] = codon;
         }
-        Codon codon1 = codonsVector[1]; codon1.occupied = true; codonsVector[1] = codon1;
-        Codon* deviceCodons = thrust::raw_pointer_cast( &codonsVector[0] );
+        Codon* deviceCodons;
+        cudaMalloc(&deviceCodons, lengthPadded*sizeof(Codon));
+        cudaMemcpy(deviceCodons, &hostCodons[0], lengthPadded*sizeof(Codon), cudaMemcpyHostToDevice);
 
         // init ribosomes
-        // TODO: in a kernel
-        thrust::device_vector<Ribosome> ribosomesVector (numRibosomes);
+        const int numRibosomes = ((lengthPadded - 1) / 32 + 1) * 32;
+        vector<Ribosome> hostRibosomes (numRibosomes);  // TODO: always the same - move out of loop 
         Ribosome ribo00; ribo00.pos = 0; ribo00.time = 0;
         Ribosome ribo10; ribo10.pos = 1; ribo10.time = 0;
-        for (int i = 0; i != numRibosomes; ++i) ribosomesVector[i] = ribo00;
-        ribosomesVector[0] = ribo10;
-        Ribosome* deviceRibosomes = thrust::raw_pointer_cast( &ribosomesVector[0] );
+        for (int i = 0; i != numRibosomes; ++i) hostRibosomes[i] = ribo00;
+        hostRibosomes[0] = ribo10;
+        Ribosome* deviceRibosomes;
+        cudaMalloc(&deviceRibosomes, numRibosomes*sizeof(Ribosome));
+        cudaMemcpy(deviceRibosomes, &hostRibosomes[0], numRibosomes*sizeof(Ribosome), cudaMemcpyHostToDevice);
+
 
         // info to give
         In in; in.epoch = epoch; in.maxIterMult = 1000; in.frontpadding = 1;
-        //in.iters4display = 0;
 
         // info to return
         double* deviceProb;
@@ -414,6 +416,8 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     {
         int lengthPadded = rates[rna].size();
         int length = lengthPadded - 1;
+        Codon* deviceCodons = codonsPtr[rna];
+        Ribosome* deviceRibosomes = ribosomesPtr[rna];
         Out out = outPtr[rna];
         In in = inPtr[rna];
         double* deviceProb = out.prob;
@@ -447,7 +451,11 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         // write result
         probs[rna].resize(length);
         cudaMemcpy (&probs[rna][0], deviceProb, length*sizeof(double), cudaMemcpyDeviceToHost);
+
+        // clean up
         cudaFree (deviceProb); 
+        cudaFree (deviceCodons);
+        cudaFree (deviceRibosomes);
     }
 
     cudaFree (deviceStates);
