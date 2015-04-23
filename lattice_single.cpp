@@ -99,18 +99,12 @@ void run (vector<Codon>& codons, deque<Ribosome>& ribosomes, double epoch, int v
 void runSinglePolysome (const vector<double>& rates, double epoch, 
                         vector<double>& probs, int verbose)
 {
-    int padding = 1;
-
-    // pad the vector
-    int lengthPadded = rates.size();
-    int length = rates.size() - 1;
-
+    int length = rates.size();
     cout << "length: " << length << endl;
-    cout << "padding: " << padding << endl;
 
     // init codons
-    vector<Codon> codons (lengthPadded);
-    for (int i = 0; i != lengthPadded; ++i)
+    vector<Codon> codons (length);
+    for (int i = 0; i != length; ++i)
         codons[i] = { .time = 0, .rate = rates[i], .occupied = false, .accumtime = 0 };
 
     // init ribosomes
@@ -119,7 +113,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
 
     double t = 0;
 
-    const int MaxIter = 10000 * codons.size();
+    const int MaxIter = 100 * codons.size() * codons.size();
     int it = 0;
     for (it = 0; it != MaxIter; ++it)
     {
@@ -130,11 +124,11 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
         {
             cout << setw(2) <<  it << "   &   " << ribosomes.size()-1 << "   &    " << flush;
             // occupied
-            for (int i = 0; i != lengthPadded; ++i)
+            for (int i = 0; i != length; ++i)
                 cout << (codons[i].occupied ? '*' : '.');
             cout << "   &   ";
             // accumtime
-            for (int i = padding; i != lengthPadded; ++i)
+            for (int i = 0; i != length; ++i)
                 cout << setprecision(2) << setw(5) << codons[i].accumtime << " ";
             cout << " \\\\" << endl;
         }
@@ -153,46 +147,19 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
 }
 
 
-
-// sort indices of input array
-vector<size_t> orderedLength (const vector< vector<double> >& values) {
-    vector<size_t> indices(values.size());
-    iota( begin(indices), end(indices), static_cast<size_t>(0) );
-    sort( begin(indices), end(indices), [&](size_t a, size_t b) 
-            { return values[a].size() < values[b].size(); } );
-    return indices;
-}
-
-
 void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
                            vector< vector<double> >& probs, int verbose)
 {
     int numRNAs = rates.size();
     probs.resize(numRNAs);
 
-    // sort rates vectors based on length
-    vector<size_t> indices = orderedLength (rates);
-
-    //int numsplits = 1;
-    auto maxLengthElement = std::max_element (rates.begin(), rates.end(),
-            [&](const vector<double>& a, const vector<double>& b) { return a.size() < b.size(); } );
-    int maxLengthPadded = maxLengthElement->size();
-
-    if (verbose)
-        cout << "split: " << setw(3) << 0 << ", numRibos: " << maxLengthPadded << endl;
-
     for (int rna = 0; rna != numRNAs; ++rna)
     {
-        int lengthPadded = rates[rna].size();
-        int length = lengthPadded - 1;
-        int padding = 1;
-
-        if (verbose >= 1)
-            cout << "rna: " << rna << endl;
+        int length = rates[rna].size();
 
         // init codons
-        vector<Codon> codons (lengthPadded);
-        for (int i = 0; i != lengthPadded; ++i)
+        vector<Codon> codons (length);
+        for (int i = 0; i != length; ++i)
             codons[i] = { .time = 0, .rate = rates[rna][i], .occupied = false, .accumtime = 0 };
 
         // init ribosomes
@@ -201,7 +168,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
 
         double t = 0;
 
-        const int MaxIter = 10000 * codons.size();
+        const int MaxIter = 100 * codons.size() * codons.size();
         int it = 0;
         for (it = 0; it != MaxIter; ++it)
         {
@@ -212,11 +179,11 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
             {
                 cout << setw(2) <<  it << "   &   " << ribosomes.size()-1 << "   &    " << flush;
                 // occupied
-                for (int i = 0; i != lengthPadded; ++i)
+                for (int i = 0; i != length; ++i)
                     cout << (codons[i].occupied ? '*' : '.');
                 cout << "   &   ";
                 // accumtime
-                for (int i = padding; i != lengthPadded; ++i)
+                for (int i = 0; i != length; ++i)
                     cout << setprecision(1) << setw(3) << codons[i].accumtime << " ";
                 cout << " \\\\" << endl;
             }
@@ -225,9 +192,9 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         }
 
         if (verbose)
-            cout << "finished in " << it << " iterations" << endl;
+            cout << "rna: " << rna << ", length: " << length << ", finished in " << it << " iterations" << endl;
         if (it == MaxIter)
-            cerr << "warning: reached the maximum number of iterations" << endl;
+            cerr << "rna: " << rna << ", warning: reached the maximum number of iterations" << endl;
 
         // write result
         probs[rna].resize (length);

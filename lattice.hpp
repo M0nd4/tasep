@@ -7,8 +7,8 @@ struct Ribosome {
 };
 
 
-const int RiboWidth = 2;
-const int RiboKeyCodon = 1;
+const int RiboWidth = 10;
+const int RiboKeyCodon = 5;
 
 
 struct Codon {

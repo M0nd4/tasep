@@ -255,7 +255,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
 {
     int length = rates.size();
     cout << "length: " << length << endl;
-
+    
     // init
     const int numRibosomes = min (1024, ((length - 1) / 32 / RiboWidth + 1) * 32);
     Ribosome* deviceRibosomes = initRibosomes(numRibosomes);
@@ -268,6 +268,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
 
     // pass constants
     In in; in.epoch = epoch; in.maxIterMult = 100; in.frontpadding = 1;
+    cout << "epoch: " << epoch << ", MaxIterMult: " << in.maxIterMult << ", numRibos: " << numRibosomes << endl;
 
     // info to return
     double* deviceProb;
@@ -351,7 +352,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     int maxLength = max_element(rates.begin(), rates.end(), lengthCompare)->size();
     int numRibosomes = min (1024, ((maxLength - 1) / 32 / RiboWidth + 1) * 32);
     if (verbose)
-        cout << "epoch: " << epoch << ", MaxIterMult: " << MaxIterMult << ", numRibos: " << numRibosomes << endl;
+        cout << "epoch: " << epoch << ", maxLength: " << maxLength << ", numRibos: " << numRibosomes << endl;
 
     // set up seeds
     curandState* deviceStates;
@@ -414,7 +415,8 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         double* deviceProb = out.prob;
 
         if (verbose)
-            cout << "rna: " << rna << ", finished in " << out.iter << " iterations" << endl;
+            cout << "rna: " << rna << ", length: " << length 
+                 << ", finished in " << out.iter << " iterations" << endl;
         if (out.iter >= in.maxIterMult * length)
             cerr << "warning: reached the maximum number of iterations" << endl;
 
