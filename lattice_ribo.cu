@@ -46,26 +46,31 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
 
     // TODO: many ribosomes will be in pos == 0. Check early
 
-    // copy codon data from global memory to registers
     int pos = ribo.pos;
-    int nextpos = (pos + length + 1) % length;
+    int nextpos = (pos + length + (RiboWidth - RiboKeyCodon)) % length;
+    
+    // copy codon data from global memory to registers
     Codon codon = codons[pos];
     Codon nextcodon = codons[nextpos];
 
     // after copy
     __syncthreads();
 
+    // range of covered codons, the range follows the convention [a, b)
+    int beginCoveredPos = max (pos - RiboKeyCodon, 0);
+    int endCoveredPos   = min (pos - RiboKeyCodon + RiboWidth, length);
+    
     // update current time with time of the next codon
     double t0 = max(codon.time, nextcodon.time);
     ribosomes[riboId].time = t0;
     codons[pos].accumtime += t0 - codon.time; 
-    codons[pos].time = t0;
-    
+    for (int i = beginCoveredPos; i != endCoveredPos; ++i) codons[i].time = t0;
+
     // do not jump if can not
-    bool nextIsFar = (nextribo.pos - pos + length) % length > 1 || (pos != 0 && nextribo.pos == 0); 
+    bool nextIsFar = (nextribo.pos - pos > RiboWidth) || (pos != 0 && nextribo.pos == 0); 
     if (!nextIsFar) return;
 
-   // sample the period
+    // sample the period
     double dt = sampleTime(codon.rate, globalState);
     dt = min(dt, epoch - t0);     // when about to finish
     double t = t0 + dt;
@@ -73,16 +78,17 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     // update times of the ribo and of the codon
     codons[pos].accumtime += dt;
     ribosomes[riboId].time = t;
-    codons[pos].time = t;         // for the next ribosome
+    for (int i = beginCoveredPos; i != endCoveredPos; ++i) codons[i].time = t;
     codons[nextpos].time = t;     // for computing time of occupancy by next ribosome
 
     // finish simulation for this ribo when time reaches the epoch
     if (t >= epoch) return;
 
     // flip two codons and update the ribosome position
-    codons[nextpos].occupied = true;
+    int jumppos = (pos + 1) % length;
+    codons[jumppos].occupied = true;
     codons[pos].occupied = false;
-    ribosomes[riboId].pos = nextpos;
+    ribosomes[riboId].pos = jumppos;
 
      // take care of the border
     if (pos == length - 1)
@@ -251,7 +257,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     cout << "length: " << length << endl;
 
     // init
-    const int numRibosomes = ((length - 1) / 32 + 1) * 32;
+    const int numRibosomes = min (1024, ((length - 1) / 32 / RiboWidth + 1) * 32);
     Ribosome* deviceRibosomes = initRibosomes(numRibosomes);
     Codon*    deviceCodons    = initCodons(rates);
 
@@ -261,7 +267,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );
 
     // pass constants
-    In in; in.epoch = epoch; in.maxIterMult = 1000; in.frontpadding = 1;
+    In in; in.epoch = epoch; in.maxIterMult = 100; in.frontpadding = 1;
 
     // info to return
     double* deviceProb;
@@ -340,10 +346,10 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     // sort rates vectors based on length
     //vector<size_t> indices = orderedLength (rates);
 
-    const int MaxIterMult = 1000;
+    const int MaxIterMult = 100;
     
     int maxLength = max_element(rates.begin(), rates.end(), lengthCompare)->size();
-    int numRibosomes = ((maxLength - 1) / 32 + 1) * 32;
+    int numRibosomes = min (1024, ((maxLength - 1) / 32 / RiboWidth + 1) * 32);
     if (verbose)
         cout << "epoch: " << epoch << ", MaxIterMult: " << MaxIterMult << ", numRibos: " << numRibosomes << endl;
 
@@ -369,7 +375,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         Codon*    deviceCodons    = initCodons(rates[rna]);
 
         // pass constants
-        In in; in.epoch = epoch; in.maxIterMult = 1000; in.frontpadding = 1;
+        In in; in.epoch = epoch; in.maxIterMult = MaxIterMult; in.frontpadding = 1;
 
         // info to return
         double* deviceProb;

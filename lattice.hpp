@@ -7,6 +7,10 @@ struct Ribosome {
 };
 
 
+const int RiboWidth = 2;
+const int RiboKeyCodon = 1;
+
+
 struct Codon {
     double time;  // used when time is assyncronized
     double rate;
