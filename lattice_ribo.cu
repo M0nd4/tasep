@@ -86,8 +86,11 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
 
      // take care of the border
     if (pos == length - 1)
-    {
         ribosomes[riboId].time = 0;
+
+    __syncthreads();
+    if (threadIdx.x == 0)
+    {
         codons[0].time = 0;
         codons[0].occupied = false;
     }
