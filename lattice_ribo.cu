@@ -44,7 +44,8 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     Ribosome ribo     = ribosomes[riboId];
     Ribosome nextribo = ribosomes[nextId];
 
-    // TODO: many ribosomes will be in pos == 0. Check early
+    // most ribos are inactive. Check and return early
+    if (ribo.pos == 0 && nextribo.pos == 0) return;
 
     int pos = ribo.pos;
     int nextpos = (pos + length + (RiboWidth - RiboKeyCodon)) % length;
@@ -90,9 +91,8 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     codons[pos].occupied = false;
     ribosomes[riboId].pos = jumppos;
 
-     // take care of the border
-    if (pos == length - 1)
-        ribosomes[riboId].time = 0;
+    // zero when at the border
+    ribosomes[riboId].time *= (pos == length - 1);
 
     __syncthreads();
     if (threadIdx.x == 0)
