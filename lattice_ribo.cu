@@ -137,7 +137,7 @@ struct Out {
 
 __global__ static 
 void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthsPtr, 
-                      In* inPtr, Out* outPtr, curandState* globalState)
+                      In* inPtr, Out* outPtr, curandState* globalState, int verbose = 0)
 {
     __shared__ int activeRibos;
    
@@ -157,7 +157,7 @@ void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthsPt
         if (activeRibos == 0) break;
 
         // write occupancy into specially pre-allocated memory 
-        if (out.iter < in.iters4display)
+        if (verbose > 1 && out.iter < in.iters4display)
         {
             if (threadIdx.x == 0) out.activeRibos[out.iter] = activeRibos;
             for (int i = threadIdx.x; i < length; i += blockDim.x)
@@ -277,8 +277,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     Out out; out.prob = deviceProb;
 
     // debugging/visualization info to return
-    int iters4display = verbose >= 2 ? 200 : 0;
-    initDebug (in, out, length, iters4display);
+    if (verbose) initDebug (in, out, length, (verbose > 1 ? 200 : 0));
 
     // copy the in/out structs to device
     thrust::device_vector<Codon*> codonsPtr       (1, deviceCodons);
@@ -294,7 +293,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
                                              thrust::raw_pointer_cast( lengthPtr.data() ), 
                                              thrust::raw_pointer_cast( inPtr.data() ),
                                              thrust::raw_pointer_cast( outPtr.data() ),
-                                             deviceStates);
+                                             deviceStates, verbose);
 
     out = outPtr[0];
     cout << "finished in " << out.iter << " iterations" << endl;
@@ -302,7 +301,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
         cerr << "warning: reached the maximum number of iterations" << endl;
 
     // debugging/visualization info
-    printDebug (in, out, length);
+    if (verbose) printDebug (in, out, length);
 
     // write result
     probs.resize(length);
@@ -406,8 +405,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
             Out out; out.prob = deviceProb;
 
             // debugging/visualization info to return
-            int iters4display = verbose >= 2 ? 200 : 0;
-            initDebug (in, out, length, iters4display);
+            if (verbose > 1) initDebug (in, out, length, (verbose > 1 ? 200 : 0));
 
             // copy the in/out structs to device
             codonsPtr[rna]    = deviceCodons;
@@ -422,7 +420,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
                                                        thrust::raw_pointer_cast( lengthPtr.data() ), 
                                                        thrust::raw_pointer_cast( inPtr.data() ),
                                                        thrust::raw_pointer_cast( outPtr.data() ),
-                                                       deviceStates);
+                                                       deviceStates, verbose);
 
         // process outputs
         for (int index = beginIndex; index != endIndex; ++index)
@@ -446,7 +444,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
                 cerr << "warning: reached the maximum number of iterations" << endl;
 
             // debugging/visualization info
-            printDebug (in, out, length);
+            if (verbose > 1) printDebug (in, out, length);
 
             // write result
             probs[rna].resize(length);
