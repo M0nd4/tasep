@@ -1,5 +1,6 @@
 #include "lattice.hpp"
 
+#include <list>
 #include <stdio.h>
 #include <stdlib.h>
 #include <cmath>
@@ -318,7 +319,6 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
 
 // sort input array and return permutation indices. Can be done with lambdas in Cuda 7.
 // TODO: do sort in a kernel
-/*
 struct LengthComparatorByIndex
 {
     LengthComparatorByIndex (const vector<vector<double> >& data) : m_data(data) { }
@@ -331,12 +331,7 @@ vector<size_t> orderedLength (const vector< vector<double> >& values) {
     sort( indices.begin(), indices.end(), LengthComparatorByIndex(values));
     return indices;
 }
-*/
 
-bool lengthCompare (const vector<double>& left, const vector<double>& right)
-{
-    return left.size() < right.size();
-}
 
 void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
                            vector< vector<double> >& probs, int verbose)
@@ -344,95 +339,125 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     int numRNAs = rates.size();
     probs.resize(numRNAs);
 
-    // sort rates vectors based on length
-    //vector<size_t> indices = orderedLength (rates);
-
     const int MaxIterMult = 100;
-    
-    int maxLength = max_element(rates.begin(), rates.end(), lengthCompare)->size();
-    int numRibosomes = min (1024, ((maxLength - 1) / 32 / RiboWidth + 1) * 32);
-    if (verbose)
-        cout << "epoch: " << epoch << ", maxLength: " << maxLength << ", numRibos: " << numRibosomes << endl;
 
-    // set up seeds
-    curandState* deviceStates;
-    cudaMalloc ( &deviceStates, numRibosomes * sizeof(curandState) );
-    setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );
-
-    // one element per RNA
-    thrust::device_vector<Codon*> codonsPtr       (numRNAs);
-    thrust::device_vector<Ribosome*> ribosomesPtr (numRNAs);
-    thrust::device_vector<int> lengthPtr          (numRNAs);
-    thrust::device_vector<In> inPtr               (numRNAs);
-    thrust::device_vector<Out> outPtr             (numRNAs);
-
-    // prepare inputs
-    for (int rna = 0; rna != numRNAs; ++rna)
+    const int MinBlockPerSplit = 70;
+    const double SplitReductionFactor = 1.5;
+    // sort rates vectors based on length
+    vector<size_t> indices = orderedLength (rates);
+    // form a list of indices where RNAs will be split
+    vector<int> indicesOfSplit (1, indices.size()-1);
+    // split by length. Each time length is halved, it is a split
+    for (int i = indices.size()-1; i != -1; --i)
     {
-        int length = rates[rna].size();
-
-        // init
-        Ribosome* deviceRibosomes = initRibosomes(numRibosomes);
-        Codon*    deviceCodons    = initCodons(rates[rna]);
-
-        // pass constants
-        In in; in.epoch = epoch; in.maxIterMult = MaxIterMult; in.frontpadding = 1;
-
-        // info to return
-        double* deviceProb;
-        cudaMalloc (&deviceProb, length*sizeof(double));
-        Out out; out.prob = deviceProb;
-
-        // debugging/visualization info to return
-        int iters4display = verbose >= 2 ? 200 : 0;
-        initDebug (in, out, length, iters4display);
-
-        // copy the in/out structs to device
-        codonsPtr[rna]    = deviceCodons;
-        ribosomesPtr[rna] = deviceRibosomes;
-        lengthPtr[rna]    = length;
-        inPtr[rna]        = in;
-        outPtr[rna]       = out;
-
-        if (verbose > 1) cout << "rna: " << rna << ", length: " << length << endl;
+        // stop condition
+        if (rates[indices[i]].size() < 32 * RiboWidth) break;
+        // go until have at least 32 RNAs
+        if (indicesOfSplit.back() - i < MinBlockPerSplit) continue;
+        // point where one more split is done
+        if (rates[indices[i]].size() < rates[indices[indicesOfSplit.back()]].size() / SplitReductionFactor)
+            indicesOfSplit.push_back(i);
     }
+    reverse (indicesOfSplit.begin(), indicesOfSplit.end());
 
-    computePolysome <<< numRNAs, numRibosomes >>> (thrust::raw_pointer_cast( codonsPtr.data() ), 
-                                                   thrust::raw_pointer_cast( ribosomesPtr.data() ), 
-                                                   thrust::raw_pointer_cast( lengthPtr.data() ), 
-                                                   thrust::raw_pointer_cast( inPtr.data() ),
-                                                   thrust::raw_pointer_cast( outPtr.data() ),
-                                                   deviceStates);
+    // info on the split
+    cout << "size of splits: " << indicesOfSplit.size() << endl;
+    for (int i = 0; i != indicesOfSplit.size(); ++i)
+        cout << "split: " << setw(4) << rates[indices[indicesOfSplit[i]]].size() 
+             << ", numRNA: " << indicesOfSplit[i] - (i == 0 ? 0 : indicesOfSplit[i-1]) << endl;
+    cout << "end of splits." << endl;
 
-    // process outputs
-    for (int rna = 0; rna != numRNAs; ++rna)
+    for (int split = 0; split != indicesOfSplit.size(); ++split)
     {
-        int length = rates[rna].size();
-        Codon* deviceCodons = codonsPtr[rna];
-        Ribosome* deviceRibosomes = ribosomesPtr[rna];
-        Out out = outPtr[rna];
-        In in = inPtr[rna];
-        double* deviceProb = out.prob;
+        int maxLength = rates[indices[indicesOfSplit[split]]].size();
+        int numRibosomes = min (1024, ((maxLength / RiboWidth - 1) / 32 + 1) * 32);
+        if (verbose > 1) cout << "maxLength: " << maxLength << ", numRibos: " << numRibosomes << endl;
 
-        if (verbose)
-            cout << "rna: " << rna << ", length: " << length 
-                 << ", finished in " << out.iter << " iterations" << endl;
-        if (out.iter >= in.maxIterMult * length)
-            cerr << "warning: reached the maximum number of iterations" << endl;
+        // set up seeds
+        curandState* deviceStates;
+        cudaMalloc ( &deviceStates, numRibosomes * sizeof(curandState) );
+        setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );
 
-        // debugging/visualization info
-        printDebug (in, out, length);
+        // one element per RNA
+        thrust::device_vector<Codon*> codonsPtr       (numRNAs);
+        thrust::device_vector<Ribosome*> ribosomesPtr (numRNAs);
+        thrust::device_vector<int> lengthPtr          (numRNAs);
+        thrust::device_vector<In> inPtr               (numRNAs);
+        thrust::device_vector<Out> outPtr             (numRNAs);
 
-        // write result
-        probs[rna].resize(length);
-        cudaMemcpy (&probs[rna][0], deviceProb, length*sizeof(double), cudaMemcpyDeviceToHost);
+        // prepare inputs
+        int beginIndex = (split == 0 ? 0 : indicesOfSplit[split-1]) + 1;
+        int endIndex = indicesOfSplit[split] + 1;
+        for (int index = beginIndex; index != endIndex; ++index)
+        {
+            int rna = indices[index];
+            int length = rates[rna].size();
 
-        // clean up
-        cudaFree (deviceProb); 
-        cudaFree (deviceCodons);
-        cudaFree (deviceRibosomes);
-    }
+            // init
+            Ribosome* deviceRibosomes = initRibosomes(numRibosomes);
+            Codon*    deviceCodons    = initCodons(rates[rna]);
 
-    cudaFree (deviceStates);
+            // pass constants
+            In in; in.epoch = epoch; in.maxIterMult = MaxIterMult; in.frontpadding = 1;
+
+            // info to return
+            double* deviceProb;
+            cudaMalloc (&deviceProb, length*sizeof(double));
+            Out out; out.prob = deviceProb;
+
+            // debugging/visualization info to return
+            int iters4display = verbose >= 2 ? 200 : 0;
+            initDebug (in, out, length, iters4display);
+
+            // copy the in/out structs to device
+            codonsPtr[rna]    = deviceCodons;
+            ribosomesPtr[rna] = deviceRibosomes;
+            lengthPtr[rna]    = length;
+            inPtr[rna]        = in;
+            outPtr[rna]       = out;
+        }
+
+        computePolysome <<< numRNAs, numRibosomes >>> (thrust::raw_pointer_cast( codonsPtr.data() ), 
+                                                       thrust::raw_pointer_cast( ribosomesPtr.data() ), 
+                                                       thrust::raw_pointer_cast( lengthPtr.data() ), 
+                                                       thrust::raw_pointer_cast( inPtr.data() ),
+                                                       thrust::raw_pointer_cast( outPtr.data() ),
+                                                       deviceStates);
+
+        // process outputs
+        for (int index = beginIndex; index != endIndex; ++index)
+        {
+            int rna = indices[index];
+            int length = rates[rna].size();
+
+            Codon* deviceCodons = codonsPtr[rna];
+            Ribosome* deviceRibosomes = ribosomesPtr[rna];
+            Out out = outPtr[rna];
+            In in = inPtr[rna];
+            double* deviceProb = out.prob;
+
+            int numRibosomes = min (1024, ((maxLength / RiboWidth - 1) / 32 + 1) * 32);
+            if (verbose)
+                cout << "rna: " << setw(4) << rna 
+                     << ", length: " << setw(4) << length 
+                     << ", numRibos: " << setw(4) << numRibosomes
+                     << ", finished in " << out.iter << " iterations" << endl;
+            if (out.iter >= in.maxIterMult * length)
+                cerr << "warning: reached the maximum number of iterations" << endl;
+
+            // debugging/visualization info
+            printDebug (in, out, length);
+
+            // write result
+            probs[rna].resize(length);
+            cudaMemcpy (&probs[rna][0], deviceProb, length*sizeof(double), cudaMemcpyDeviceToHost);
+
+            // clean up
+            cudaFree (deviceProb); 
+            cudaFree (deviceCodons);
+            cudaFree (deviceRibosomes);
+        }
+
+        cudaFree (deviceStates);
+    } // split
 }
-
