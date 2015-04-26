@@ -113,7 +113,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
 
     double t = 0;
 
-    const int MaxIter = 100 * codons.size() * codons.size();
+    const int MaxIter = MaxIterMult * codons.size() * codons.size();
     int it = 0;
     for (it = 0; it != MaxIter; ++it)
     {
@@ -168,7 +168,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
 
         double t = 0;
 
-        const int MaxIter = 100 * codons.size() * codons.size();
+        const int MaxIter = MaxIterMult * codons.size() * codons.size();
         int it = 0;
         for (it = 0; it != MaxIter; ++it)
         {

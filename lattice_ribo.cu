@@ -255,20 +255,19 @@ void printDebug (const In& in, const Out& out, int length)
 
 void runSinglePolysome (const vector<double>& rates, double epoch, 
                         vector<double>& probs, int verbose)
-{
+{ 
+    // profile time
     struct timeval tv1, tv2;
-    
     gettimeofday(&tv1, NULL);
     cudaFree(0);
     gettimeofday(&tv2, NULL);
     printf("CUDA init: Time taken in execution = %f seconds\n",
            (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
-           (double) (tv2.tv_sec - tv1.tv_sec));
-           
-    
+           (double) (tv2.tv_sec - tv1.tv_sec));       
     gettimeofday(&tv1, NULL); 
+
     int length = rates.size();
-    cout << "length: " << length << endl;
+    if (verbose) cout << "length: " << length << endl;
     
     // init
     const int numRibosomes = min (1024, ((length - 1) / 32 / RiboWidth + 1) * 32);
@@ -281,8 +280,9 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );
 
     // pass constants
-    In in; in.epoch = epoch; in.maxIterMult = 100; in.frontpadding = 1;
-    cout << "epoch: " << epoch << ", MaxIterMult: " << in.maxIterMult << ", numRibos: " << numRibosomes << endl;
+    In in; in.epoch = epoch; in.maxIterMult = MaxIterMult; in.frontpadding = 1;
+    if (verbose)
+        cout << "epoch: " << epoch << ", numRibos: " << numRibosomes << endl;
 
     // info to return
     double* deviceProb;
@@ -290,7 +290,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     Out out; out.prob = deviceProb;
 
     // debugging/visualization info to return
-    if (verbose) initDebug (in, out, length, (verbose > 1 ? 200 : 0));
+    if (verbose > 1) initDebug (in, out, length, (verbose ? 200 : 0));
 
     // copy the in/out structs to device
     thrust::device_vector<Codon*> codonsPtr       (1, deviceCodons);
@@ -309,12 +309,13 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
                                              deviceStates, verbose);
 
     out = outPtr[0];
-    cout << "finished in " << out.iter << " iterations" << endl;
+    if (verbose)
+        cout << "finished in " << out.iter << " iterations" << endl;
     if (out.iter >= in.maxIterMult * length)
         cerr << "warning: reached the maximum number of iterations" << endl;
 
     // debugging/visualization info
-    if (verbose) printDebug (in, out, length);
+    if (verbose > 1) printDebug (in, out, length);
 
     // write result
     probs.resize(length);
@@ -353,21 +354,18 @@ vector<size_t> orderedLength (const vector< vector<double> >& values) {
 void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
                            vector< vector<double> >& probs, int verbose)
 {
-
+    // time profile
     struct timeval tv1, tv2;
-    
     gettimeofday(&tv1, NULL);
     cudaFree(0);
     gettimeofday(&tv2, NULL);
     printf("CUDA init: Time taken in execution = %f seconds\n",
            (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
            (double) (tv2.tv_sec - tv1.tv_sec));
-           
-    gettimeofday(&tv1, NULL);     
+    gettimeofday(&tv1, NULL);
+
     int numRNAs = rates.size();
     probs.resize(numRNAs);
-
-    const int MaxIterMult = 100;
 
     const int MinBlockPerSplit = 70;
     const double SplitReductionFactor = 1.5;
@@ -389,11 +387,14 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     reverse (indicesOfSplit.begin(), indicesOfSplit.end());
 
     // info on the split
-    cout << "size of splits: " << indicesOfSplit.size() << endl;
-    for (int i = 0; i != indicesOfSplit.size(); ++i)
-        cout << "split: " << setw(4) << rates[indices[indicesOfSplit[i]]].size() 
-             << ", numRNA: " << indicesOfSplit[i] - (i == 0 ? 0 : indicesOfSplit[i-1]) << endl;
-    cout << "end of splits." << endl;
+    if (verbose)
+    {
+        cout << "size of splits: " << indicesOfSplit.size() << endl;
+        for (int i = 0; i != indicesOfSplit.size(); ++i)
+            cout << "split: " << setw(4) << rates[indices[indicesOfSplit[i]]].size() 
+                 << ", numRNA: " << indicesOfSplit[i] - (i == 0 ? 0 : indicesOfSplit[i-1]) << endl;
+        cout << "end of splits." << endl;
+    }
 
     for (int split = 0; split != indicesOfSplit.size(); ++split)
     {

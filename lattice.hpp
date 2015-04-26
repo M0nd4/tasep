@@ -1,6 +1,9 @@
 #include <vector>
 
 
+const int MaxIterMult = 100;
+
+
 struct Ribosome {
     double time;
     int pos;
