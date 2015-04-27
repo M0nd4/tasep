@@ -15,7 +15,7 @@ using namespace std;
 using namespace TCLAP;
 
 
-// each line in the ratesPath file is a vector of rates
+// each line in the ratesPath file is a vector of rates, line[0] is init rate
 // number of lines -> number of vectors
 // 
 vector< vector<double> > loadRates (const string& ratesPath)
@@ -77,7 +77,7 @@ int main(int argc, char **argv)
         cerr << "rates are empty" << endl;
         return 1;
     }
-    if (verbose > 2)
+    if (verbose > 3)
     {
         cout << "rates: " << endl;
         for (int rna = 0; rna != rates.size(); ++rna)
@@ -90,7 +90,7 @@ int main(int argc, char **argv)
     ofstream ofs (outPath.c_str());
     if (multiple)
     {
-        cout << "running runMultiplePolysomes" << endl;
+        if (verbose) cout << "running runMultiplePolysomes" << endl;
         vector< vector<double> > probs;
         
         
@@ -98,7 +98,7 @@ int main(int argc, char **argv)
         gettimeofday(&tv1, NULL);     
         runMultiplePolysomes (rates, epoch, probs, verbose);
         gettimeofday(&tv2, NULL);
-        printf("-----TOTAL MULTIPLE-----: Time taken in execution = %f seconds\n",
+        printf("total time, sec: %f\n",
               (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
               (double) (tv2.tv_sec - tv1.tv_sec));
               
@@ -110,7 +110,7 @@ int main(int argc, char **argv)
     }
     else
     {
-        cout << "running runSinglePolysome" << endl;
+        if (verbose) cout << "running runSinglePolysome" << endl;
         vector<double> probs;
         
         

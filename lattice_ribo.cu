@@ -359,7 +359,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     gettimeofday(&tv1, NULL);
     cudaFree(0);
     gettimeofday(&tv2, NULL);
-    printf("CUDA init: Time taken in execution = %f seconds\n",
+    printf("CUDA init time, sec: %f\n",
            (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
            (double) (tv2.tv_sec - tv1.tv_sec));
     gettimeofday(&tv1, NULL);
@@ -485,7 +485,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     } // split
 
     gettimeofday(&tv2, NULL);
-    printf("CUDA main: Time taken in execution = %f seconds\n",
+    printf("CUDA main time, sec: %f\n",
            (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
            (double) (tv2.tv_sec - tv1.tv_sec));
 }
