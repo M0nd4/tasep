@@ -1,7 +1,7 @@
 #include <vector>
 
 
-const int MaxIterMult = 100;
+const int MaxIterMult = 10000;
 
 
 struct Ribosome {

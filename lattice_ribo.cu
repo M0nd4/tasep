@@ -400,7 +400,11 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     {
         int maxLength = rates[indices[indicesOfSplit[split]]].size();
         int numRibosomes = min (1024, ((maxLength / RiboWidth - 1) / 32 + 1) * 32);
-        if (verbose > 1) cout << "maxLength: " << maxLength << ", numRibos: " << numRibosomes << endl;
+        int splitSize = indicesOfSplit[split] - (split == 0 ? 0 : indicesOfSplit[split-1]);
+        if (verbose > 1) 
+            cout << "splitSize: " << splitSize 
+                 << ", maxLength: " << maxLength 
+                 << ", numRibos: " << numRibosomes << endl;
 
         // set up seeds
         curandState* deviceStates;
@@ -408,16 +412,17 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         setupRand <<< 1, numRibosomes >>> ( deviceStates, time(NULL) );
 
         // one element per RNA
-        thrust::device_vector<Codon*> codonsPtr       (numRNAs);
-        thrust::device_vector<Ribosome*> ribosomesPtr (numRNAs);
-        thrust::device_vector<int> lengthPtr          (numRNAs);
-        thrust::device_vector<In> inPtr               (numRNAs);
-        thrust::device_vector<Out> outPtr             (numRNAs);
+        thrust::device_vector<Codon*> codonsPtr       (splitSize);
+        thrust::device_vector<Ribosome*> ribosomesPtr (splitSize);
+        thrust::device_vector<int> lengthPtr          (splitSize);
+        thrust::device_vector<In> inPtr               (splitSize);
+        thrust::device_vector<Out> outPtr             (splitSize);
 
         // prepare inputs
         int beginIndex = (split == 0 ? 0 : indicesOfSplit[split-1]) + 1;
         int endIndex = indicesOfSplit[split] + 1;
-        for (int index = beginIndex; index != endIndex; ++index)
+        int index, rnaId;
+        for (index = beginIndex, rnaId = 0; index != endIndex; ++index, ++rnaId)
         {
             int rna = indices[index];
             int length = rates[rna].size();
@@ -438,14 +443,14 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
             if (verbose > 1) initDebug (in, out, length, (verbose > 1 ? 200 : 0));
 
             // copy the in/out structs to device
-            codonsPtr[rna]    = deviceCodons;
-            ribosomesPtr[rna] = deviceRibosomes;
-            lengthPtr[rna]    = length;
-            inPtr[rna]        = in;
-            outPtr[rna]       = out;
+            codonsPtr[rnaId]    = deviceCodons;
+            ribosomesPtr[rnaId] = deviceRibosomes;
+            lengthPtr[rnaId]    = length;
+            inPtr[rnaId]        = in;
+            outPtr[rnaId]       = out;
         }
 
-        computePolysome <<< numRNAs, numRibosomes >>> (thrust::raw_pointer_cast( codonsPtr.data() ), 
+        computePolysome <<< splitSize, numRibosomes >>> (thrust::raw_pointer_cast( codonsPtr.data() ), 
                                                        thrust::raw_pointer_cast( ribosomesPtr.data() ), 
                                                        thrust::raw_pointer_cast( lengthPtr.data() ), 
                                                        thrust::raw_pointer_cast( inPtr.data() ),
@@ -453,16 +458,16 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
                                                        deviceStates, verbose);
 
         // process outputs
-        for (int index = beginIndex; index != endIndex; ++index)
+        for (index = beginIndex, rnaId = 0; index != endIndex; ++index, ++rnaId)
         {
             int rna = indices[index];
             int length = rates[rna].size();
 
-            Codon* deviceCodons = codonsPtr[rna];
-            Ribosome* deviceRibosomes = ribosomesPtr[rna];
-            Out out = outPtr[rna];
-            In in = inPtr[rna];
-            double* deviceProb = out.prob;
+            Codon* deviceCodons       = codonsPtr[rnaId];
+            Ribosome* deviceRibosomes = ribosomesPtr[rnaId];
+            Out out                   = outPtr[rnaId];
+            In in                     = inPtr[rnaId];
+            double* deviceProb        = out.prob;
 
             int numRibosomes = min (1024, ((maxLength / RiboWidth - 1) / 32 + 1) * 32);
             if (verbose)
