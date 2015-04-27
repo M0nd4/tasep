@@ -392,7 +392,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         cout << "size of splits: " << indicesOfSplit.size() << endl;
         for (int i = 0; i != indicesOfSplit.size(); ++i)
             cout << "split: " << setw(4) << rates[indices[indicesOfSplit[i]]].size() 
-                 << ", numRNA: " << indicesOfSplit[i] - (i == 0 ? 0 : indicesOfSplit[i-1]) << endl;
+                 << ", numRNA: " << indicesOfSplit[i] - (i == 0 ? -1 : indicesOfSplit[i-1]) << endl;
         cout << "end of splits." << endl;
     }
 
@@ -400,7 +400,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     {
         int maxLength = rates[indices[indicesOfSplit[split]]].size();
         int numRibosomes = min (1024, ((maxLength / RiboWidth - 1) / 32 + 1) * 32);
-        int splitSize = indicesOfSplit[split] - (split == 0 ? 0 : indicesOfSplit[split-1]);
+        int splitSize = indicesOfSplit[split] - (split == 0 ? -1 : indicesOfSplit[split-1]);
         if (verbose > 1) 
             cout << "splitSize: " << splitSize 
                  << ", maxLength: " << maxLength 
