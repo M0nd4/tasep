@@ -256,16 +256,6 @@ void printDebug (const In& in, const Out& out, int length)
 void runSinglePolysome (const vector<double>& rates, double epoch, 
                         vector<double>& probs, int verbose)
 { 
-    // profile time
-    struct timeval tv1, tv2;
-    gettimeofday(&tv1, NULL);
-    cudaFree(0);
-    gettimeofday(&tv2, NULL);
-    printf("CUDA init: Time taken in execution = %f seconds\n",
-           (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
-           (double) (tv2.tv_sec - tv1.tv_sec));       
-    gettimeofday(&tv1, NULL); 
-
     int length = rates.size();
     if (verbose > 1) cout << "length: " << length << endl;
     
@@ -326,11 +316,6 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     cudaFree (deviceCodons);
     cudaFree (deviceRibosomes);
     cudaFree (deviceStates);
-    
-    gettimeofday(&tv2, NULL);
-    printf("CUDA - main program: Time taken in execution = %f seconds\n",
-           (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
-           (double) (tv2.tv_sec - tv1.tv_sec));
 }
 
 
