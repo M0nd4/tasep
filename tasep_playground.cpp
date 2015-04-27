@@ -54,13 +54,14 @@ vector< vector<double> > loadRates (const string& ratesPath)
 int main(int argc, char **argv)
 {
     // init the parser
-    CmdLine cmd ("run experiment, and compare to stored file");
+    CmdLine cmd ("run experiment, and save result to file");
     // describe arguments
     ValueArg<string> cmdRatesPath ("", "rates", "path of rates", true, "", "string", cmd);
     ValueArg<string> cmdOutPath ("", "out", "path of output", false, "/dev/null", "string", cmd);
     ValueArg<double> cmdEpoch ("", "epoch", "time to finish simulation", false, 10, "double", cmd);
-    MultiSwitchArg   cmdVerbose ("v", "verbose", "verbosity level", cmd);
     SwitchArg        cmdUseMultiple ("m", "multiple", "run multiple polysomes", cmd);
+    MultiSwitchArg   cmdVerbose ("v", "verbose", "verbosity level: "
+                                 "0: none, 1: O(const), 2: O(RNAs), 3: O(RNAs*epoch)", cmd);
     // parse arguments
     cmd.parse(argc, argv);
     string ratesPath = cmdRatesPath.getValue();

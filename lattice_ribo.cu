@@ -159,7 +159,7 @@ void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthsPt
         if (activeRibos == 0) break;
 
         // write occupancy into specially pre-allocated memory 
-        if (verbose > 1 && out.iter < in.iters4display)
+        if (verbose > 2 && out.iter < in.iters4display)
         {
             if (threadIdx.x == 0) out.activeRibos[out.iter] = activeRibos;
             for (int i = threadIdx.x; i < length; i += blockDim.x)
@@ -267,7 +267,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     gettimeofday(&tv1, NULL); 
 
     int length = rates.size();
-    if (verbose) cout << "length: " << length << endl;
+    if (verbose > 1) cout << "length: " << length << endl;
     
     // init
     const int numRibosomes = min (1024, ((length - 1) / 32 / RiboWidth + 1) * 32);
@@ -281,7 +281,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
 
     // pass constants
     In in; in.epoch = epoch; in.maxIterMult = MaxIterMult; in.frontpadding = 1;
-    if (verbose)
+    if (verbose > 1)
         cout << "epoch: " << epoch << ", numRibos: " << numRibosomes << endl;
 
     // info to return
@@ -290,7 +290,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     Out out; out.prob = deviceProb;
 
     // debugging/visualization info to return
-    if (verbose > 1) initDebug (in, out, length, (verbose ? 200 : 0));
+    if (verbose > 2) initDebug (in, out, length, 200);
 
     // copy the in/out structs to device
     thrust::device_vector<Codon*> codonsPtr       (1, deviceCodons);
@@ -299,7 +299,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
     thrust::device_vector<In> inPtr               (1, in);
     thrust::device_vector<Out> outPtr             (1, out);
 
-    if (verbose) cout << "in: " << in.epoch << " " << in.maxIterMult << endl;
+    if (verbose > 1) cout << "in: " << in.epoch << " " << in.maxIterMult << endl;
 
     computePolysome <<< 1, numRibosomes >>> (thrust::raw_pointer_cast( codonsPtr.data() ), 
                                              thrust::raw_pointer_cast( ribosomesPtr.data() ), 
@@ -309,13 +309,13 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
                                              deviceStates, verbose);
 
     out = outPtr[0];
-    if (verbose)
+    if (verbose > 1)
         cout << "finished in " << out.iter << " iterations" << endl;
     if (out.iter >= in.maxIterMult * length)
         cerr << "warning: reached the maximum number of iterations" << endl;
 
     // debugging/visualization info
-    if (verbose > 1) printDebug (in, out, length);
+    if (verbose > 2) printDebug (in, out, length);
 
     // write result
     probs.resize(length);
@@ -386,25 +386,15 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     }
     reverse (indicesOfSplit.begin(), indicesOfSplit.end());
 
-    // info on the split
-    if (verbose)
-    {
-        cout << "size of splits: " << indicesOfSplit.size() << endl;
-        for (int i = 0; i != indicesOfSplit.size(); ++i)
-            cout << "split: " << setw(4) << rates[indices[indicesOfSplit[i]]].size() 
-                 << ", numRNA: " << indicesOfSplit[i] - (i == 0 ? -1 : indicesOfSplit[i-1]) << endl;
-        cout << "end of splits." << endl;
-    }
-
     for (int split = 0; split != indicesOfSplit.size(); ++split)
     {
+        int splitSize = indicesOfSplit[split] - (split == 0 ? -1 : indicesOfSplit[split-1]);
         int maxLength = rates[indices[indicesOfSplit[split]]].size();
         int numRibosomes = min (1024, ((maxLength / RiboWidth - 1) / 32 + 1) * 32);
-        int splitSize = indicesOfSplit[split] - (split == 0 ? -1 : indicesOfSplit[split-1]);
-        if (verbose > 1) 
-            cout << "splitSize: " << splitSize 
-                 << ", maxLength: " << maxLength 
-                 << ", numRibos: " << numRibosomes << endl;
+        if (verbose) 
+            cout << "splitSize: " << setw(4) << splitSize 
+                 << ", maxLength: " << setw(4) << maxLength 
+                 << ", numRibos: " << setw(5) << numRibosomes << endl;
 
         // set up seeds
         curandState* deviceStates;
@@ -440,7 +430,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
             Out out; out.prob = deviceProb;
 
             // debugging/visualization info to return
-            if (verbose > 1) initDebug (in, out, length, (verbose > 1 ? 200 : 0));
+            if (verbose > 2) initDebug (in, out, length, 200);
 
             // copy the in/out structs to device
             codonsPtr[rnaId]    = deviceCodons;
@@ -470,16 +460,16 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
             double* deviceProb        = out.prob;
 
             int numRibosomes = min (1024, ((maxLength / RiboWidth - 1) / 32 + 1) * 32);
-            if (verbose)
+            if (verbose > 1)
                 cout << "rna: " << setw(4) << rna 
                      << ", length: " << setw(4) << length 
                      << ", numRibos: " << setw(4) << numRibosomes
                      << ", finished in " << out.iter << " iterations" << endl;
             if (out.iter >= in.maxIterMult * length)
-                cerr << "warning: reached the maximum number of iterations" << endl;
+                cerr << "warning: rna " << rna << " reached the maximum number of iterations" << endl;
 
             // debugging/visualization info
-            if (verbose > 1) printDebug (in, out, length);
+            if (verbose > 2) printDebug (in, out, length);
 
             // write result
             probs[rna].resize(length);
@@ -493,6 +483,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
 
         cudaFree (deviceStates);
     } // split
+
     gettimeofday(&tv2, NULL);
     printf("CUDA main: Time taken in execution = %f seconds\n",
            (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +

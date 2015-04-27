@@ -91,16 +91,11 @@ void step (vector<Codon>& codons, deque<Ribosome>& ribosomes, double& t, double 
 }
 
 
-void run (vector<Codon>& codons, deque<Ribosome>& ribosomes, double epoch, int verbose = 0)
-{
-}
-
-
 void runSinglePolysome (const vector<double>& rates, double epoch, 
                         vector<double>& probs, int verbose)
 {
     int length = rates.size();
-    cout << "length: " << length << endl;
+    if (verbose > 1) cout << "length: " << length << endl;
 
     // init codons
     vector<Codon> codons (length);
@@ -120,7 +115,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
         // stop condition
         if (t >= epoch) break;
 
-        if (verbose >= 2)
+        if (verbose > 2)
         {
             cout << setw(2) <<  it << "   &   " << ribosomes.size()-1 << "   &    " << flush;
             // occupied
@@ -136,7 +131,7 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
         step (codons, ribosomes, t, epoch);
     }
 
-    cout << "finished in " << it << " iterations" << endl;
+    if (verbose > 1) cout << "finished in " << it << " iterations" << endl;
     if (it == MaxIter)
         cerr << "warning: reached the maximum number of iterations" << endl;
 
@@ -175,7 +170,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
             // stop condition
             if (t >= epoch) break;
 
-            if (verbose >= 2)
+            if (verbose > 2)
             {
                 cout << setw(2) <<  it << "   &   " << ribosomes.size()-1 << "   &    " << flush;
                 // occupied
@@ -191,10 +186,10 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
             step (codons, ribosomes, t, epoch);
         }
 
-        if (verbose)
+        if (verbose > 1)
             cout << "rna: " << rna << ", length: " << length << ", finished in " << it << " iterations" << endl;
         if (it == MaxIter)
-            cerr << "rna: " << rna << ", warning: reached the maximum number of iterations" << endl;
+            cerr << "warning: rna " << rna << " reached the maximum number of iterations" << endl;
 
         // write result
         probs[rna].resize (length);
