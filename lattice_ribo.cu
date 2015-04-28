@@ -51,8 +51,9 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     if (ribo.pos == 0 && nextribo.pos == 0) return;
 
     int pos = ribo.pos;
-    int nextpos = (pos + length + (RiboWidth - RiboKeyCodon)) % length;
-    
+    int nextpos = ((pos - RiboKeyCodon + RiboWidth) % length);
+    nextpos *= int(nextpos > pos);  // zero if ribosome is about to jump off
+
     // copy codon data from global memory to registers
     Codon codon = codons[pos];
     Codon nextcodon = codons[nextpos];
@@ -61,14 +62,15 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     __syncthreads();
 
     // range of covered codons, the range follows the convention [a, b)
-    int beginCoveredPos = max (pos - RiboKeyCodon, 0);
+    int beginCoveredPos = max (pos - RiboKeyCodon, 1);
     int endCoveredPos   = min (pos - RiboKeyCodon + RiboWidth, length);
     
     // update current time with time of the next codon
     double t0 = max(codon.time, nextcodon.time);
+    //if (nextpos == 0) t0 = codon.time;
     ribosomes[riboId].time = t0;  // so that ribos, stalled after dead ribos get to epoch eventually
     codons[pos].accumtime += t0 - codon.time; 
-    for (int i = beginCoveredPos; i != endCoveredPos; ++i) codons[i].time = t0;
+    for (int i = beginCoveredPos; i < endCoveredPos; ++i) codons[i].time = t0;
 
     // do not jump if can not
     bool nextIsFar = (nextribo.pos - pos > RiboWidth) || (pos != 0 && nextribo.pos == 0); 
@@ -82,7 +84,7 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     // update times of the ribo and of the codon
     codons[pos].accumtime += dt;
     ribosomes[riboId].time = t;
-    for (int i = beginCoveredPos; i != endCoveredPos; ++i) codons[i].time = t;
+    for (int i = beginCoveredPos; i < endCoveredPos; ++i) codons[i].time = t;
     codons[nextpos].time = t;     // for computing time of occupancy by next ribosome
 
     // finish simulation for this ribo when time reaches the epoch
@@ -95,7 +97,7 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     ribosomes[riboId].pos = jumppos;
 
     // zero when at the border
-    ribosomes[riboId].time *= (pos == length - 1);
+    ribosomes[riboId].time *= int(jumppos != 0);
 }
 
 __device__ static
