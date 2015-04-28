@@ -105,7 +105,6 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     }
 }
 
-
 __device__ static
 int countActiveRibos (Ribosome* ribosomes, double epoch)
 {
@@ -120,6 +119,13 @@ int countActiveRibos (Ribosome* ribosomes, double epoch)
     return blockDim.x - countNonactive;
 }
 
+__device__ static
+bool hasHitEpoch (Ribosome* ribosomes, double epoch)
+{
+    for (int i = 0; i != blockDim.x; ++i)
+        if (ribosomes[i].time >= epoch) return true;
+    return false;
+}
 
 // pass info forward and backwards
 struct In {
@@ -130,7 +136,7 @@ struct In {
 };
 
 struct Out {
-    int iter;
+    int iter, iterHitEpoch;
     double* prob;
     char* occupancy;
     int* activeRibos;
@@ -154,7 +160,11 @@ void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthsPt
     {
         // stop condition
         if (threadIdx.x == 0)
+        {
             activeRibos = countActiveRibos (ribosomes, in.epoch);
+            if (verbose > 2 && !out.iterHitEpoch && hasHitEpoch (ribosomes, in.epoch)) 
+                out.iterHitEpoch = out.iter;
+        }
         __syncthreads();
         if (activeRibos == 0) break;
 
@@ -228,6 +238,7 @@ void initDebug (In& in, Out& out, int length, int iters4display)
     in.iters4display = iters4display;
     out.occupancy = deviceOccupancy;
     out.activeRibos = deviceActiveRibos;                        
+    out.iterHitEpoch = 0;
 }
 
 void printDebug (const In& in, const Out& out, int length)
@@ -241,6 +252,7 @@ void printDebug (const In& in, const Out& out, int length)
         cudaMemcpy (&vectorActiveRibos[0], out.activeRibos, in.iters4display*sizeof(int), cudaMemcpyDeviceToHost);
         for (int iter = 0; iter != min(in.iters4display, out.iter); ++iter)
         {
+            cout << (out.iterHitEpoch == iter ? "/" : " ");
             cout << setw(3) << iter << "  &  " << setw(3) << vectorActiveRibos[iter] << "  &  ";
             for (int i = 0; i != length; ++i)
                 cout << (vectorOccupancy[iter * length + i] ? '*' : '.');
