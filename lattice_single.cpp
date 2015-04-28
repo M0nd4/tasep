@@ -6,6 +6,7 @@
 #include <functional>
 #include <iomanip>
 #include <assert.h>
+#include <sys/time.h>
 
 #include "lattice.hpp"
 
@@ -145,6 +146,10 @@ void runSinglePolysome (const vector<double>& rates, double epoch,
 void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
                            vector< vector<double> >& probs, int verbose)
 {
+    // time profile
+    struct timeval tv1, tv2;
+    gettimeofday(&tv1, NULL);
+
     int numRNAs = rates.size();
     probs.resize(numRNAs);
 
@@ -196,5 +201,10 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         for (int i = 0; i != probs[rna].size(); ++i)
             probs[rna][i] = codons[i].accumtime / epoch;
     }
+
+    gettimeofday(&tv2, NULL);
+    printf("single-CPU-time-sec: %f\n",
+           (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
+           (double) (tv2.tv_sec - tv1.tv_sec));
 }
 

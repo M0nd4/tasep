@@ -5,15 +5,12 @@
 #include <stdlib.h>
 #include <cmath>
 #include <algorithm>
+#include <iomanip>
+#include <sys/time.h>
 
 #include <thrust/device_vector.h>
-
 #include <curand.h>
 #include <curand_kernel.h>
-
-#include <iomanip>
-
-#include <sys/time.h>
 
 // FIXME: for many blocks probably need to create many states
 __global__ static
@@ -356,10 +353,10 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     gettimeofday(&tv1, NULL);
     cudaFree(0);
     gettimeofday(&tv2, NULL);
-    printf("CUDA init time, sec: %f\n",
+    /*printf("CUDA init time, sec: %f\n",
            (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
            (double) (tv2.tv_sec - tv1.tv_sec));
-    gettimeofday(&tv1, NULL);
+    */gettimeofday(&tv1, NULL);
 
     int numRNAs = rates.size();
     probs.resize(numRNAs);
@@ -482,7 +479,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
     } // split
 
     gettimeofday(&tv2, NULL);
-    printf("CUDA main time, sec: %f\n",
+    printf("CUDA-main-time-sec: %f\n",
            (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
            (double) (tv2.tv_sec - tv1.tv_sec));
 }

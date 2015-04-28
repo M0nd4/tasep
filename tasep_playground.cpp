@@ -98,10 +98,10 @@ int main(int argc, char **argv)
         gettimeofday(&tv1, NULL);     
         runMultiplePolysomes (rates, epoch, probs, verbose);
         gettimeofday(&tv2, NULL);
-        printf("total time, sec: %f\n",
+        /*printf("total time, sec: %f\n",
               (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
               (double) (tv2.tv_sec - tv1.tv_sec));
-              
+        */      
               
         assert (rates.size() == probs.size());
         for (int rna = 0; rna != probs.size(); ++rna)
@@ -113,15 +113,7 @@ int main(int argc, char **argv)
         if (verbose) cout << "running runSinglePolysome" << endl;
         vector<double> probs;
         
-        
-        struct timeval tv1, tv2;
-        gettimeofday(&tv1, NULL);
         runSinglePolysome (rates[0], epoch, probs, verbose);
-        gettimeofday(&tv2, NULL);
-        printf("-----TOTAL SINGLE-----: Time taken in execution = %f seconds\n",
-              (double) (tv2.tv_usec - tv1.tv_usec) / (double)1000000 +
-              (double) (tv2.tv_sec - tv1.tv_sec));
-              
               
         for (int i = 0; i != probs.size(); ++i)
             ofs << probs[i] << " " << flush;
