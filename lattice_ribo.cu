@@ -394,7 +394,7 @@ void runMultiplePolysomes (const vector< vector<double> > rates, double epoch,
         thrust::device_vector<Out> outPtr             (splitSize);
 
         // prepare inputs
-        int beginIndex = (split == 0 ? 0 : indicesOfSplit[split-1]) + 1;
+        int beginIndex = (split == 0 ? 0 : indicesOfSplit[split-1] + 1);
         int endIndex = indicesOfSplit[split] + 1;
         int index, rnaId;
         for (index = beginIndex, rnaId = 0; index != endIndex; ++index, ++rnaId)
