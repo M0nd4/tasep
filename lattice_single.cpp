@@ -34,7 +34,7 @@ tuple<int, double> dynamicMonteCarlo (const vector<Codon>& codons, const deque<R
     size_t N = ribosomes.size();
     vector<double> ribosome_rates (N+1, 0);
     for (int i = 0; i != N; ++i)
-        if (ribosomes[i].pos == codons.size() - 1 || not codons[ribosomes[i].pos+1].occupied)
+        if (i == ribosomes.size()-1 || ribosomes[i+1].pos - ribosomes[i].pos > RiboWidth)
             ribosome_rates[i] = codons[ribosomes[i].pos].rate;
         else
             ribosome_rates[i] = 0;
