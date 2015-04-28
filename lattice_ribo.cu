@@ -66,7 +66,7 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     
     // update current time with time of the next codon
     double t0 = max(codon.time, nextcodon.time);
-    ribosomes[riboId].time = t0;
+    ribosomes[riboId].time = t0;  // so that ribos, stalled after dead ribos get to epoch eventually
     codons[pos].accumtime += t0 - codon.time; 
     for (int i = beginCoveredPos; i != endCoveredPos; ++i) codons[i].time = t0;
 
@@ -96,13 +96,6 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
 
     // zero when at the border
     ribosomes[riboId].time *= (pos == length - 1);
-
-    __syncthreads();
-    if (threadIdx.x == 0)
-    {
-        codons[0].time = 0;
-        codons[0].occupied = false;
-    }
 }
 
 __device__ static
@@ -149,6 +142,8 @@ void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthsPt
 {
     __shared__ int activeRibos;
    
+    Codon codon0; codon0.occupied = false; codon0.time = 0; codon0.accumtime = 0;
+
     // each block has its own arrays (numRibosomes is the same in every block)
     Codon*    codons = codonsPtr[blockIdx.x];
     Ribosome* ribosomes = ribosomesPtr[blockIdx.x];
@@ -178,6 +173,9 @@ void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthsPt
         }
 
         updatePolysome (codons, ribosomes, length, in.epoch, globalState);
+        __syncthreads();
+        if (threadIdx.x == 0)
+            codons[0] = codon0;
     }
 
     // calculate resulting probability
