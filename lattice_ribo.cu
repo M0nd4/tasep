@@ -59,12 +59,12 @@ void updatePolysome (Codon* codons, Ribosome* ribosomes, int length, double epoc
     __syncthreads();
 
     // range of covered codons, the range follows the convention [a, b)
-    int beginCoveredPos = max (pos - RiboKeyCodon, 1);
+    int beginCoveredPos = max (pos - RiboKeyCodon, 1);    // do not change virtual codon 0
     int endCoveredPos   = min (pos - RiboKeyCodon + RiboWidth, length);
     
     // update current time with time of the next codon
     double t0 = max(codon.time, nextcodon.time);
-    //if (nextpos == 0) t0 = codon.time;
+    //if (nextpos == 0) t0 = codon.time;  // debugging, shouldn't make differrence
     ribosomes[riboId].time = t0;  // so that ribos, stalled after dead ribos get to epoch eventually
     codons[pos].accumtime += t0 - codon.time; 
     for (int i = beginCoveredPos; i < endCoveredPos; ++i) codons[i].time = t0;
@@ -132,6 +132,7 @@ struct Out {
     double* prob;
     char* occupancy;
     int* activeRibos;
+    double *codonTimes;
 };
 
 
@@ -162,12 +163,15 @@ void computePolysome (Codon** codonsPtr, Ribosome** ribosomesPtr, int* lengthsPt
         __syncthreads();
         if (activeRibos == 0) break;
 
-        // write occupancy into specially pre-allocated memory 
+        // write debug info into specially pre-allocated memory 
         if (verbose > 2 && out.iter < in.iters4display)
         {
             if (threadIdx.x == 0) out.activeRibos[out.iter] = activeRibos;
             for (int i = threadIdx.x; i < length; i += blockDim.x)
+            {
                 out.occupancy[out.iter * length + i] = codons[i].occupied;
+                out.codonTimes[out.iter * length + i] = codons[i].time;  
+            }
             __syncthreads();
         }
 
@@ -223,18 +227,23 @@ Ribosome* initRibosomes (int numRibosomes)
 void initDebug (In& in, Out& out, int length, int iters4display)
 {
     int space4occupancy = iters4display*length*sizeof(char);
+    int space4time = in.iters4display*length*sizeof(double);
     char* deviceOccupancy;
     int* deviceActiveRibos;
+    double* deviceCodonTimes;
     if (iters4display) 
     {
         cudaMalloc (&deviceOccupancy, space4occupancy);
         cudaMemset (deviceOccupancy, 0, space4occupancy);
         cudaMalloc (&deviceActiveRibos, iters4display*sizeof(int));
         cudaMemset (deviceActiveRibos, 0, iters4display*sizeof(int));
+        cudaMalloc (&deviceCodonTimes, space4time);
+        cudaMemset (deviceCodonTimes, 0, space4time);
     }
     in.iters4display = iters4display;
     out.occupancy = deviceOccupancy;
-    out.activeRibos = deviceActiveRibos;                        
+    out.activeRibos = deviceActiveRibos;
+    out.codonTimes = deviceCodonTimes;
     out.iterHitEpoch = 0;
 }
 
@@ -243,20 +252,27 @@ void printDebug (const In& in, const Out& out, int length)
     if (in.iters4display)
     {
         int space4occupancy = in.iters4display*length*sizeof(char);
+        int space4time = in.iters4display*length*sizeof(double);
         vector<char> vectorOccupancy (in.iters4display*length);
         cudaMemcpy (&vectorOccupancy[0], out.occupancy, space4occupancy, cudaMemcpyDeviceToHost);
         vector<int> vectorActiveRibos (in.iters4display);
         cudaMemcpy (&vectorActiveRibos[0], out.activeRibos, in.iters4display*sizeof(int), cudaMemcpyDeviceToHost);
+        vector<double> vectorCodonTimes (in.iters4display*length);
+        cudaMemcpy (&vectorCodonTimes[0], out.codonTimes, space4time, cudaMemcpyDeviceToHost);
+        cudaFree (out.occupancy);
+        cudaFree (out.activeRibos);
+        cudaFree (out.codonTimes);
         for (int iter = 0; iter != min(in.iters4display, out.iter); ++iter)
         {
             cout << (out.iterHitEpoch == iter ? "/" : " ");
             cout << setw(3) << iter << "  &  " << setw(3) << vectorActiveRibos[iter] << "  &  ";
             for (int i = 0; i != length; ++i)
                 cout << (vectorOccupancy[iter * length + i] ? '*' : '.');
+            cout << "  ";
+            for (int i = 0; i != length; ++i)
+                cout << setprecision(3) << setw(5) << vectorCodonTimes[iter * length + i] << " ";
             cout << endl;
         }
-        cudaFree (out.occupancy);
-        cudaFree (out.activeRibos);
     }
 }
 
